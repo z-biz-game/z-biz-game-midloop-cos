@@ -4,6 +4,9 @@
 而且**每个点都得是"穿过它的那条直线段"的正中**——点两侧那段直线一样长。每盘唯一解，判胜只由引擎的
 `verify` 说了算，界面不许自己宣布胜利。
 
+- **在线试玩**：<https://z-biz-game.github.io/z-biz-game-midloop-cos/>（`main` 推送即由 `pages.yml` 部署；
+  本地那份是 `npm run dev` 起的 5281，两种 URL 形态都被 `tools/verify.sh` 跑过）
+
 ## 规则（玩家视角）
 
 两条原文照抄，不做改写：
