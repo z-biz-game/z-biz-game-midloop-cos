@@ -89,8 +89,12 @@ Slitherlink（环走**格线**、线索在格内数边）、Yajilin（箭头 + �
 穿过该格的**直线段长度**）。Arukone 是族里离本玩法最近的一条，但它约束的是段长，不是段的中点，
 而且它的线索不会落在格线上。
 
-本玩法的两处在已出货的 97 个仓里都没有先例：**线索可以落在环自身某条边的中点上**，以及
+本玩法的两处在同族已出货的仓里都没有先例：**线索可以落在环自身某条边的中点上**，以及
 **点两侧线段等长**这条约束本身。走格心的单环是族里的公共底座，被换掉的是线索语义——不是"同一条环换个说法"。
+
+那句"没有先例"是 2026-09-30 立项时对手上这批同族仓做的一次人工 grep（`vborder`/`hborder` 这种边中点线索的语义
+只有本仓实现），它不是一条会为你变红的断言——每个仓各在 CI 里独立 checkout，谁也 grep 不到谁。所以它记在
+下面的"不承诺"里，不作为承诺卖出去。
 
 ## 两条出货判据（这个仓凭什么存在）
 
@@ -100,10 +104,10 @@ Slitherlink（环走**格线**、线索在格内数边）、Yajilin（箭头 + �
 
 | 判据 | 说的话 | 谁在复测 | 本轮读数（日志名） |
 |---|---|---|---|
-| 1 唯一性 | 不含任何推理规则的**逐格穷举计数器**，在 `NODE_CAP = 2000000` 节点内数出**恰好 1** 个解 | `B3`（每张出货盘从线索集合重数）＋ `engine-test` A/C/D 段 | 48 张 × 6 档：`数不出 1` 0 张；无点盘 n=2..5 与独立简单环枚举同值 `1 / 13 / 213 / 9349`（`_tmp-midloop-balance-final48.log`、`_tmp-midloop-engine-test-final.log`） |
-| 2 可推性 | 铅笔十条命名规则从**空盘**起、一次不猜、推到全盘定死，每一笔都点名一条规则 | `B2`（推不满＝红）＋ `engine-test` E 段 ＋ 浏览器里用页面上那份引擎再推一遍（`gen` 场景） | 48 张 × 6 档：`推不满` 0 张；官方 5×5 从空盘推满（`tools/verify.sh` 的 core/engine 报告打印 steps 与 rules） |
+| 1 唯一性 | 不含任何推理规则的**逐格穷举计数器**，在 `NODE_CAP = 2000000` 节点内数出**恰好 1** 个解 | `B3`（每张出货盘从线索集合重数）＋ `engine-test` A/C/D 段 | 菜单内 4 档 × 每档 48 张：`数不出 1` 0 张（9/10 两档只量成本、不出货，所以没有 B3 行）；无点盘 n=2..5 与独立简单环枚举同值 `1 / 13 / 213 / 9349`（`_tmp-midloop-balance-final48.log`、`_tmp-midloop-engine-test-final.log`） |
+| 2 可推性 | 铅笔十条命名规则从**空盘**起、一次不猜、推到全盘定死，每一笔都点名一条规则 | `B2`（推不满＝红）＋ `engine-test` E 段 ＋ 浏览器里用页面上那份引擎再推一遍（`gen` 场景） | 同样 4 档 × 48 张：`推不满` 0 张；官方 5×5 从空盘推满（`tools/verify.sh` 的 core/engine 报告打印 steps 与 rules） |
 
-两条判据的代价分配是量出来的，不是省的：**按" forced 程度"挖线索、推满之后只数一遍**，比按解数挖便宜三个数量级
+两条判据的代价分配是量出来的，不是省的：**按"forced 程度"挖线索、推满之后只数一遍**，比按解数挖便宜三个数量级
 （按解数挖把"证唯一"的代价付在每一次重试里，见 `DESIGN.md` 第 5 节）。所以尺寸天花板是**铅笔的**，不是计数器的。
 
 ## 尺寸菜单是被量出来的（线一个不挪）
@@ -128,7 +132,7 @@ Slitherlink（环走**格线**、线索在格内数边）、Yajilin（箭头 + �
 ```bash
 npm run dev      # node server.cjs 5281
 npm test         # node tools/engine-test.mjs（纯 node，判据 1/2 的正面证据 + 三组反空转对照）
-npm run balance  # node tools/balance.mjs（六条红线 B1..B6，默认 48 张 × 3 个候选 × 6 档）
+npm run balance  # node tools/balance.mjs（红线 B1/B2/B3/B3b/B4/B5/B6，默认 48 张 × 3 个候选 × 6 档）
 npm run doctest  # node tools/doctest.mjs（本文与 DESIGN 里每一个现值都等于代码的现在值）
 npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形态）
 ```
@@ -143,7 +147,7 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 |---|---|---|---|
 | 语法 | `npm run check` | 每个源文件都能被 node 解析，`verify.sh` 是 `bash -n` | OK check（`_tmp-midloop-check.log`） |
 | 引擎保证 | `node tools/engine-test.mjs` | 判据 1/2 的正面证据 + 三组反空转对照（0 解 / 8 解 / 金标准环数）+ 两套编码的约定对齐 | 32 checks, 0 failed（`_tmp-midloop-engine-test-final.log`） |
-| 红线 | `node tools/balance.mjs` | 出盘率、零猜测推满、计数器复数恰好 1、两排序逐张同解、线索最小、菜单与 `TOO_EXPENSIVE` 不说谎、无装饰性规则 | 39 条全绿（`_tmp-midloop-balance-final48.log`） |
+| 红线 | `node tools/balance.mjs` | 出盘率、零猜测推满、计数器复数恰好 1、两排序逐张同解、线索最小（balance 自己重数一遍再和生成器自报的对账）、菜单与 `TOO_EXPENSIVE` 不说谎、无装饰性规则 | 40 条全绿（`_tmp-midloop-balance-final48.log`） |
 | 文档 | `node tools/doctest.mjs` | 本文与 DESIGN 印出去的每一个现值 | 见下面"哪条命令在 CI 里" |
 | 真浏览器闸 | `bash tools/verify.sh` | DOM 文本/几何、画布像素、真输入事件、存档与续局、两种 URL 形态 | 全绿（`_tmp-midloop-verify-shapes.log`） |
 | 阴性自证 | `GATE_SELFTEST=1 bash tools/verify.sh` | 闸必须能被证明**会红** | rc＝1，32/32 份报告各自点名吃下种下的错（`_tmp-midloop-verify-selftest.log`） |
@@ -202,6 +206,11 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 - **跨机器搬存档**。存档带指纹，换机器/换 seed 就是作废并重新开始（这是上一条承诺，不是续命承诺）。
 - **9×9 与 10×10**。它们被实测请出菜单，`TOO_EXPENSIVE` 带着读数挂在引擎里；玩家拿到的盘仍然张张数得完，
   但这一档的成本分布不允许把它当一个承诺卖出去。
-- **B1 与 B3b 的单独可打破性**。`--dose` 剂量了 B2/B3/B4/B5/B6 五条；出盘率（B1）与两排序对照（B3b）
-  只有正跑的红线，没有"把它单独打破一次"的台架。
+- **B1 的单独可打破性**。`--dose` 剂量了 B2/B3/B3b/B4/B5/B6 六条；出盘率（B1）只有正跑的红线，
+  没有"把它单独打破一次"的台架（要造一张出不了盘的档，得先造一个出不了盘的生成器分支）。
+  B3b 只被剂量了「可比张数」这条腿；「两边解数不同」那半句还没有剂量项——两边同为 1 的对照若坏在
+  看不见解集的地方，这一半只能靠 `B3b` 自己红。
+- **撞车判断**。上面那段"没有先例"和"Arukone 管段长、本玩法管中点"的区别，都是立项时的一次人工比对：
+  本仓的闸不 grep 兄弟仓（CI 里各仓独立 checkout，谁也看不见谁），所以这两句是可争议的，不是可复测的。
+  它们的作用是说清凭什么建仓，不是承诺。
 

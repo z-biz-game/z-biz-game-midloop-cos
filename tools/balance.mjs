@@ -25,6 +25,7 @@ import { makeBoard, verify, loopOf } from '../js/engine/rules.js';
 import { countSolutions, countSolutionsRowMajor, NODE_CAP } from '../js/engine/count.js';
 import { RULE_ORDER, solve } from '../js/engine/pencil.js';
 import { makePuzzle, SIZES, TOO_EXPENSIVE, parseSize } from '../js/engine/generate.js';
+import { DOTS as NIKOLI5 } from './fixtures/nikoli-5x5.mjs';
 
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
@@ -48,6 +49,10 @@ const quantile = (arr, q) => {
   const a = arr.slice().sort((x, y) => x - y);
   return a[Math.min(a.length - 1, Math.floor(q * (a.length - 1)))];
 };
+// B4 咬的那个数在这里自己算一遍，不转抄生成器报的 stats：dig 少摘一条、或者把「摘得动」的
+// 盘当出货盘交出来，只有重数能看见（阳性对照见 --dose 的 B4：官方 Nikoli 5x5 就摘得动一条）。
+const droppableOf = (n, dots) =>
+  dots.filter((d) => solve(makeBoard(n, dots.filter((x) => x !== d))).pinned).length;
 
 const lines = [], red = [];
 const report = (name, ok, detail) => {
@@ -58,7 +63,8 @@ const report = (name, ok, detail) => {
 const tiers = new Map();
 for (const n of PROBED) {
   tiers.set(n, { shipped: 0, status: {}, attempts: { unpinnable: 0, overBudget: 0, notUnique: 0, illegal: 0 },
-    totalAttempts: 0, nodes: [], genMs: [], dots: [], cand: [], droppableBad: 0, notPinned: 0, illegalSol: 0,
+    totalAttempts: 0, nodes: [], genMs: [], dots: [], cand: [], droppableBad: 0, droppableLied: 0,
+    notPinned: 0, illegalSol: 0,
     recountBad: 0, abCompared: 0, abDisagree: 0, abSkipped: 0, firing: new Map() });
 }
 
@@ -76,11 +82,14 @@ for (const n of PROBED) {
     t.totalAttempts += p.stats.attempts;
     t.nodes.push(p.stats.nodes);
     t.dots.push(p.dotCount); t.cand.push(p.candidateCount);
-    if (p.droppable !== 0) t.droppableBad++;
     if (!p.stats.pencilPinned) t.notPinned++;
     const board = makeBoard(p.n, p.dots);
     if (verify(board, p.solution).length || !loopOf(board, p.solution)) t.illegalSol++;
     if (SHIP.has(n)) {
+      // B4 不读生成器自报的 droppable：拿同一句承诺自己重数一遍，再和它报的对账
+      const dropFresh = droppableOf(p.n, p.dots);
+      if (dropFresh !== 0) t.droppableBad++;
+      if (dropFresh !== p.droppable) t.droppableLied++;
       // B3 的复数不采信生成器自己报的那个数：从线索集合重新数一遍
       const fresh = countSolutions(board, NODE_CAP);
       if (fresh.bounded || fresh.count !== 1) t.recountBad++;
@@ -115,9 +124,19 @@ for (const n of PROBED) {
   report(`B3b 两排序对照可比且同解 ${n}x${n}`,
     t.abDisagree === 0 && t.abCompared >= Math.ceil(t.shipped / 2),
     `可比 ${frac(t.abCompared, t.shipped)}（对照跑不完 ${t.abSkipped} 张），解数不符 ${t.abDisagree} 张`);
-  report(`B4 线索最小 ${n}x${n}`, t.droppableBad === 0, `还能再摘 ${frac(t.droppableBad, t.shipped)} 张`);
+  report(`B4 线索最小 ${n}x${n}`, t.droppableBad === 0, `自己重数：还能再摘 ${frac(t.droppableBad, t.shipped)} 张`);
   report(`B5 档内无越预算候选 ${n}x${n}`, t.attempts.overBudget === 0,
     `越预算候选 ${t.attempts.overBudget} 个 / 共 ${t.totalAttempts} 个候选`);
+}
+
+{
+  // B4 有两个方向的谎要防：出货盘其实摘得动一条（上面那条按档红），以及生成器自己报的数
+  // 与重数不符（这一条）。后者只在两边都被算出来的时候才有意义，所以分母跟着 SHIP 走。
+  const ship = PROBED.filter((n) => SHIP.has(n));
+  const shipped = ship.reduce((s, n) => s + tiers.get(n).shipped, 0);
+  const lied = ship.reduce((s, n) => s + tiers.get(n).droppableLied, 0);
+  report('B4 复算与生成器自报的条数同意', lied === 0,
+    `重数与 p.droppable 不符 ${frac(lied, shipped)} 张（生成器说摘不动而重数说摘得动＝它在自己那份账上说谎）`);
 }
 
 {
@@ -172,7 +191,8 @@ for (const n of PROBED) {
 for (const line of lines) console.log(line);
 
 if (has('--dose')) {
-  console.log('\n阴性自证：每条红线都得能被单独打破，打不中就是闸坏了（报 ERROR，不静默补一句）');
+  console.log('\n阴性自证：名单里的每条红线都得能被单独打破，打不中就是闸坏了（报 ERROR，不静默补一句）');
+  console.log('名单外：B1 出盘率没有剂量项（它要的是"种子换一批就出不了盘"，不是能构造的盘），README「不承诺」写着这条');
   const one = (sizeKey) => makePuzzle(`dose|${sizeKey}`, sizeKey, { attempts: 8 });
   const doses = [
     ['B3', () => {
@@ -189,11 +209,23 @@ if (has('--dose')) {
       const s = solve(thin), c = countSolutions(thin, NODE_CAP);
       return { hit: !s.pinned && c.count > 0, note: `只留两点：pinned=${s.pinned} unknown=${s.unknown}，可仍有 ${c.count} 个解` };
     }],
-    ['B4', () => {
-      const p = one(SIZES[0]);
+    ['B3b', () => {
+      // B3b 有两条腿：解数要同、可比张数要有下限。后者才是"这条红线会不会空转"的那条腿——
+      // 对照跑不完，红线就退化成只有生成器自己说话。剂量：把对照的预算压到 1 个节点。
+      const p = one(SIZES[SIZES.length - 1]);
       if (!p.ok) return { hit: false, note: `出不了盘 ${p.status}` };
-      const droppable = p.dots.filter((d) => solve(makeBoard(p.n, p.dots.filter((x) => x !== d))).pinned).length;
-      return { hit: droppable > 0, note: `不挖的满线索盘还能再摘 ${droppable}/${p.candidateCount} 条` };
+      const other = countSolutionsRowMajor(makeBoard(p.n, p.dots), 1);
+      const compared = other.bounded ? 0 : 1;
+      const floor = Math.ceil(1 / 2);
+      return { hit: compared < floor,
+        note: `对照预算压到 1 个节点之后 bounded=${other.bounded}，可比 ${compared}/1 张，下限 ${floor} ⇒ 「可比张数」这条腿会红（它红了就说明下限真的在守东西）` };
+    }],
+    ['B4', () => {
+      // B4 说的是「出货盘的线索一条都摘不动」。先拿一张真盘证明这个数不是恒 0：
+      // Nikoli 官方 5×5 的 6 条线索里就有一条摘掉仍可推满（夹具那一份，engine-test 读的是同一个文件）。
+      const drop = droppableOf(5, NIKOLI5);
+      return { hit: drop > 0,
+        note: `官方 Nikoli 5x5 的 ${NIKOLI5.length} 条里还能再摘 ${drop} 条 ⇒ 「一条都摘不动」是可以红的，不是恒真` };
     }],
     ['B5', () => {
       const p = one(SIZES[SIZES.length - 1]);
@@ -215,7 +247,8 @@ if (has('--dose')) {
     if (!out.hit) { missed++; console.log(`ERROR 剂量 ${name} 没打中：${out.note}`); }
     else console.log(`ok   剂量 ${name} 打中：${out.note}`);
   }
-  console.log(missed ? `${missed} 条红线自证失败（闸本身坏了）` : '每条红线都能被单独打破');
+  console.log(missed ? `${missed} 条红线自证失败（闸本身坏了）`
+    : `名单里的 ${doses.length} 条红线都能被单独打破（B1 出盘率不在名单里）`);
   if (missed) red.push(...Array.from({ length: missed }, (_, i) => `DOSE#${i}`));
 }
 

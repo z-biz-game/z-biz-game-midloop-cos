@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server.cjs",
     "dev": "node server.cjs 5281",
-    "check": "for f in js/*.js js/*/*.js tools/*.mjs; do [ -e \"$f\" ] || continue; node --check \"$f\" || exit 1; done; node --check server.cjs && node --check tools/playtest.cjs && node --check tools/scenarios.js && bash -n tools/verify.sh && echo 'OK check'",
+    "check": "for f in js/*.js js/*/*.js tools/*.mjs tools/fixtures/*.mjs; do [ -e \"$f\" ] || continue; node --check \"$f\" || exit 1; done; node --check server.cjs && node --check tools/playtest.cjs && node --check tools/scenarios.js && bash -n tools/verify.sh && echo 'OK check'",
     "test": "node tools/engine-test.mjs",
     "test:quick": "node tools/engine-test.mjs --quick",
     "balance": "node tools/balance.mjs",

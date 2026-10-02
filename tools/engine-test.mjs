@@ -14,6 +14,8 @@ import {
 import { countSolutions, countSolutionsRowMajor, cyclesByDfs, NODE_CAP } from '../js/engine/count.js';
 import { RULE_ORDER, RULE_TEXT, solve } from '../js/engine/pencil.js';
 import { makePuzzle, SIZES, toView } from '../js/engine/generate.js';
+// Nikoli 官方 5×5 例题住在夹具里，balance 的 B4 阳性对照读的是同一个文件（不两处抄坐标）。
+import { DOTS as NIKOLI5, ANSWER as NIKOLI5_ANSWER } from './fixtures/nikoli-5x5.mjs';
 
 let fails = 0, checks = 0;
 const eq = (name, got, want) => {
@@ -23,17 +25,6 @@ const eq = (name, got, want) => {
   else console.log(`ok   ${name}`);
 };
 const asSet = (path) => path.map(([r, c]) => `${r},${c}`).sort().join(' ');
-
-/** Nikoli 官方 5x5 例题（_tmp-midloop-src-nikoli-*.html + 例题 gif 逐格转录） */
-const NIKOLI5 = [
-  { t: 'v', r: 0, c: 1 }, { t: 'c', r: 1, c: 2 }, { t: 'h', r: 2, c: 0 },
-  { t: 'c', r: 2, c: 4 }, { t: 'c', r: 3, c: 2 }, { t: 'c', r: 3, c: 3 },
-];
-const NIKOLI5_ANSWER = [
-  [0, 0], [0, 1], [1, 1], [1, 2], [1, 3], [0, 3], [0, 4], [1, 4], [2, 4], [3, 4],
-  [4, 4], [4, 3], [3, 3], [2, 3], [2, 2], [3, 2], [4, 2], [4, 1], [3, 1], [3, 0],
-  [2, 0], [1, 0],
-];
 
 /**
  * 独立枚举：把 n x n 格图里所有简单环走一遍，再按两种读法各自筛一遍。

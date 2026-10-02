@@ -90,8 +90,10 @@ bump 保度数——每条被移走的边让旧格少一条边、同时补一条
 ## 8. 门禁的分层
 
 - `tools/engine-test.mjs` —— 规则的裁定、三组反空转对照、真尺寸会师、生成器不变式、两套编码的约定。
-- `tools/balance.mjs` —— 六条红线 B1..B6，全部带分母（`a/b`），`--dose` 让每条红线各自被打破一次，
-  `--ab` 逐张比两个排序。
+- `tools/balance.mjs` —— 七条红线 B1/B2/B3/B3b/B4/B5/B6，全部带分母（`a/b`）；`--dose` 把名单里的
+  六条（除 B1 出盘率）各自单独打破一次，打不中就报 ERROR——B4 的阳性对照用的是 Nikoli 官方 5×5
+  那 6 条线索（里面有一条摘掉仍可推满），所以「出货盘一条都摘不动」不是恒真；B3b 被剂量的是
+  「对照可比张数」那条腿。`--ab` 逐张比两个排序。
 - `tools/doctest.mjs` —— README/DESIGN 里每一个"现值"都等于代码/脚本的现在值（解析到的条数自己也要断言，
   否则正则空转就是绿）。
 - `tools/verify.sh` + `playtest.cjs` + `scenarios.js` —— 真 Chrome、裸 CDP、DOM 几何与画布像素、
