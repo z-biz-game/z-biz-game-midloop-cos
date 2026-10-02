@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<!-- 不写 <base>：页面既要在 http://host/ 下跑，也要在 GitHub Pages 的 /z-biz-game-midloop-cos/
+     前缀下跑。所有资源都用相对路径，动态 import 走 document.baseURI，硬编的 "/" 会在
+     前缀形状下把 css 和引擎全部 404 掉。 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#070A14" />
+<title>中点环 · Mid-loop</title>
+<meta name="description" content="Mid-loop ミッドループ：画一条不自交的闭环，让每一颗点都正好是它那段最长直线段的正中。点可以落在格心里，也可以落在两格共用的格线上。每局唯一解，判胜只由引擎的 verify 说了算。" />
+<!-- Inline icon: without it the browser probes the domain root for /favicon.ico and logs a 404. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070A14'/%3E%3Cpath d='M5 16h22' stroke='%2345577A' stroke-width='1.6'/%3E%3Cpath d='M9 16h14' stroke='%23FFC85C' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%2302040A' stroke='%23F2F5FB' stroke-width='1.2'/%3E%3Ccircle cx='10.5' cy='8' r='2.4' fill='%2302040A' stroke='%23F2F5FB' stroke-width='1'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>中点环</h1>
+      <p class="sub">Mid-loop · ミッドループ</p>
+    </div>
+    <div class="top-actions">
+      <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-game" class="view">
+      <div class="stage">
+        <div class="stage-head">
+          <div id="size-picker" class="sizes" role="group" aria-label="盘面尺寸（档位来自引擎的 SIZES）"></div>
+          <span id="stat-seed" class="chip mono" title="开局用的原始 seed：同一个 seed 永远画同一张盘">seed —</span>
+          <span id="stat-time" class="chip mono" aria-label="本局耗时">00:00</span>
+        </div>
+
+        <div id="board-wrap">
+          <canvas id="board" tabindex="0" role="img"
+            aria-label="中点环盘面：拖拽在相邻格心之间连一段环，右键落在哪条边上就把那条边画成排除叉，方向键移动光标、回车从锚点动手。题面的黑点是题面，不能点。"
+            aria-describedby="state-line"></canvas>
+          <!-- 显式的 hidden 规则：#win-veil 平时是 display:grid，会盖掉 UA 的 [hidden]，
+               那等于一块看不见却还在吃点击的 veil。取样脚本量的是它的矩形，不是这个属性。 -->
+          <div id="win-veil" hidden>
+            <div class="win-card">
+              <h3>环连成了，每一颗点都在自己那段直线的正中</h3>
+              <p id="win-meta" class="mono"></p>
+              <p class="win-note">这一句是 <code>js/engine/rules.js</code> 的 <code>verify(board, st)</code> 说的（它返回了空数组），UI 自己没有记分板。</p>
+              <div class="win-actions">
+                <button id="btn-again" class="primary" type="button">换一局</button>
+                <button id="btn-close-veil" class="ghost" type="button">就看不动</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p id="state-line" class="state-line" aria-live="polite">拖拽相邻两格连一段环；右键落在哪条边上就把那条边画成排除叉。</p>
+        <p id="sr-cell" class="sr-only" aria-live="polite"></p>
+      </div>
+
+      <aside class="panel">
+        <div class="modes" role="group" aria-label="画笔">
+          <button id="btn-mode-loop" class="ghost mode" type="button" aria-pressed="true">画环</button>
+          <button id="btn-mode-cut" class="ghost mode" type="button" aria-pressed="false">排除叉</button>
+          <button id="btn-mode-erase" class="ghost mode" type="button" aria-pressed="false">擦掉</button>
+        </div>
+
+        <div class="acts">
+          <button id="btn-hint" class="ghost" type="button" title="问引擎要下一条被迫的结论：它落一笔，并把那条规则的那句话说给你。推不动了就直说推不动。">提示</button>
+          <button id="btn-check" class="ghost" type="button" title="把引擎 verify 的中文理由逐条摊开；通过了才盖胜利卡片。">检查</button>
+          <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-clear" class="ghost" type="button">全清</button>
+          <button id="btn-new" class="primary" type="button">换一局</button>
+        </div>
+        <p class="rules-note">「提示」只给铅笔的下一条<b>被迫</b>结论（该是环就落一段、该排除就落一个叉、格在环上就钉那一格），并把那条规则的原文印在上面那行里。铅笔推不动时它就说推不动——它不会替你猜，也不会去看答案。</p>
+
+        <div class="stats">
+          <div class="stat"><span>题面点</span><b id="stat-dots" class="mono">0</b></div>
+          <div class="stat"><span>环上格</span><b id="stat-onloop" class="mono">0</b></div>
+          <div class="stat"><span>已画环段</span><b id="stat-segs" class="mono">0</b></div>
+          <div class="stat"><span>已排除</span><b id="stat-cuts" class="mono">0</b></div>
+          <div class="stat"><span>未接头</span><b id="stat-ends" class="mono">0</b></div>
+          <div class="stat"><span>度数异常</span><b id="stat-bad" class="mono">0</b></div>
+          <div class="stat"><span>步数</span><b id="stat-moves" class="mono">0</b></div>
+          <div class="stat"><span>引擎说</span><b id="stat-verify" class="mono">—</b></div>
+        </div>
+
+        <div class="verify-box">
+          <h4>判胜只有一处</h4>
+          <p id="verify-line">「引擎说」那一格写的就是 <code>verify(board, st)</code> 返回了几条：它说有，画面再好看也没赢。</p>
+          <ul id="verify-list" class="reasons" hidden></ul>
+        </div>
+
+        <h3 class="col-title">这三条就是全部规则</h3>
+        <ol class="rules">
+          <li><b>一条环</b>：不自交、不分段的一条闭环，走在格心之间；环上的格恰好两条环边。</li>
+          <li><b>每一颗点</b>都必须是「经过它的那一段<b>最长直线段</b>」的正中点——点两侧伸出去的臂一样长。</li>
+          <li><b>点会落在两种地方</b>：格心，或者两格共用的那条<b>格线中点</b>。落在格线上就意味着它两侧的格都在环上，那段直线是<b>偶数</b>格。</li>
+        </ol>
+        <p class="rules-note">出货的每一局都由引擎实测过：唯一可解，而且铅笔求解器在零猜测下能推到底（判据见 <code>npm test</code>：规则逐条要有近邻反例、推理与参考环逐边对账、独立计数器与朴素枚举同数）。段长为奇数时中点落在格心，偶数时落在那条格线上——这一件事就是整个题目的机关。</p>
+
+        <div class="legend">
+          <span><i class="sw sw-loop"></i>你画的环段</span>
+          <span><i class="sw sw-cut"></i>排除叉（这条边不在环上）</span>
+          <span><i class="sw sw-dot"></i>格心点（那段直线穿过一格中心）</span>
+          <span><i class="sw sw-linedot"></i>格线上的点（两侧各有一格，段长是偶数）</span>
+          <span><i class="sw sw-cell"></i>环上格的底</span>
+          <span><i class="sw sw-end"></i>还没接上的端点</span>
+          <span><i class="sw sw-bad"></i>点或格被判失败（引擎 dotStatus = bad）</span>
+        </div>
+        <p class="keyhint"><b>拖拽</b> 连环 · <b>右键</b> 把指针压着的那条边画成叉（再点一次擦回没落笔） · <b>方向键</b> 移光标 · <b>回车</b> 从锚点动手 · <b>退格</b> 擦光标格 · <b>E</b> 换画笔（画环／排除叉／擦掉） · <b>H</b> 提示 · <b>C</b> 检查 · <b>Z</b> 撤销 · <b>N</b> 换一局</p>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>盘面 = <code>toView()</code> 给的题面 + 引擎状态里的那两条边数组 · 判胜 = <code>verify()</code> · 像素与模型的一致性由 <code>tools/verify.sh</code> 在真实 Chrome 里逐条量。</span>
+    <button id="btn-reset" class="link" type="button">清空存档</button>
+  </footer>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,12 +1,16 @@
 // 成本与承诺闸：每一档尺寸的「出盘率 / 可推率 / 唯一性证完率 / 线索最小性 / 规则开火」
 // 都在这里量，菜单档位由这些读数决定，不是由手感决定。
 //
-//   node tools/balance.mjs                     出货菜单，每档 24 张
-//   node tools/balance.mjs --quick             每档 8 张，只测菜单内尺寸（CI 用）
+//   node tools/balance.mjs                     出货菜单 + 每一条「太贵」的读数，每档 48 张
+//   node tools/balance.mjs --quick             每档 8 张，只测菜单内尺寸（快查用）
 //   node tools/balance.mjs --ladder 5,6,7,8,9,10   量整条尺寸梯，用来决定谁进菜单
 //   node tools/balance.mjs --dose              阴性自证：每条红线都得能为它单独红一次
 //   node tools/balance.mjs --ab                两个分支顺序逐张对照
 //   SAMPLES=12 ATTEMPTS=6 node tools/balance.mjs   指定张数与每颗种子的候选数
+//
+// 默认跑法为什么是 48 张 × 3 个候选：TOO_EXPENSIVE 里那几条理由写的就是这个底，
+// 而一条写着读数的理由必须能在同一次运行里被重新量出来（见 B5 的「不说谎」那组）。
+// --quick 把底降到 8 张，那里就只剩方向可查（越没越线），逐数对账要跑默认或 --ladder。
 //
 // 红线一句话版本：
 //   B1 出盘率  每档 ≥75% 的种子能出一张可出货的盘（撑不起菜单的档不进菜单）
@@ -28,9 +32,12 @@ const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] :
 // 尺寸可以写成 5 或 5x5，两种都吃进
 const toN = (s) => (/^\d+$/.test(String(s).trim()) ? Number(s) : parseSize(s));
 const LADDER = has('--ladder');
-const PROBED = (LADDER ? val('--ladder', SIZES.join(',')) : SIZES.join(',')).split(',').map(toN);
-const SAMPLES = Number(process.env.SAMPLES || (has('--quick') ? 8 : 24));
-const ATTEMPTS = Number(process.env.ATTEMPTS || (LADDER ? 4 : 12));
+// 默认测「菜单里的档 + 被写成太贵的档」：后者不测就没法知道那条理由是不是还在说谎。
+const DEFAULT_PROBED = [...SIZES.map(parseSize), ...TOO_EXPENSIVE.map((e) => parseSize(e.key))];
+const PROBED = [...new Set(LADDER ? String(val('--ladder', DEFAULT_PROBED.join(','))).split(',').map(toN) : DEFAULT_PROBED)]
+  .sort((a, b) => a - b);
+const SAMPLES = Number(process.env.SAMPLES || (has('--quick') ? 8 : 48));
+const ATTEMPTS = Number(process.env.ATTEMPTS || (LADDER ? 4 : 3));
 const SHIP = new Set(SIZES.map(parseSize));
 
 const pad = (s, w) => String(s).padEnd(w);
@@ -88,7 +95,7 @@ for (const n of PROBED) {
 }
 
 console.log(`\n档位读数（nodes 与「越预算候选数」是判据；ms 只是观测，不参与判定）`);
-console.log(`  ${pad('size', 6)}${num('出货', 6)}${num('med节点', 10)}${num('p95节点', 10)}${num('max节点', 10)}${num('越预算', 8)}${num('med ms', 9)}${num('max ms', 9)}${num('med点', 7)}`);
+console.log(`  ${pad('size', 6)}${num('出货', 6)}${num('med节点', 10)}${num('p95节点', 10)}${num('max节点', 10)}${num('越预算', 8)}${num('med ms', 9)}${num('p95 ms', 9)}${num('med点', 7)}`);
 for (const n of PROBED) {
   const t = tiers.get(n);
   const tried = Object.entries(t.status).map(([k, v]) => `${k}=${v}`).join(' ') || '-';
@@ -118,15 +125,38 @@ for (const n of PROBED) {
   const missing = expensive.filter((n) => !TOO_EXPENSIVE.some((e) => parseSize(e.key) === n));
   report('B5 越线的档位都被 TOO_EXPENSIVE 点名', missing.length === 0,
     `本次越线 = ${expensive.map((n) => `${n}x${n}`).join(',') || '无'}；未点名 = ${missing.map((n) => `${n}x${n}`).join(',') || '无'}`);
-  const unprobed = TOO_EXPENSIVE.filter((e) => !PROBED.includes(parseSize(e.key)));
-  const lying = TOO_EXPENSIVE.filter((e) => {
-    const n = parseSize(e.key);
-    return tiers.get(n) && tiers.get(n).attempts.overBudget === 0;
-  });
-  report('B5 TOO_EXPENSIVE 不说谎', lying.length === 0 && unprobed.length === 0,
-    `已不越线却仍列出 = ${lying.map((e) => e.key).join(',') || '无'}；本次未测 = ${unprobed.map((e) => e.key).join(',') || '无'}`);
   const reasonless = TOO_EXPENSIVE.filter((e) => !/\d/.test(e.reason || ''));
   report('B5 每条理由都带着读数', reasonless.length === 0, `没有数字的理由 = ${reasonless.map((e) => e.key).join(',') || '无'}`);
+  const unprobed = TOO_EXPENSIVE.filter((e) => !PROBED.includes(parseSize(e.key)));
+  report('B5 每一条「太贵」本次都被重测', unprobed.length === 0,
+    `本次没测到的档 = ${unprobed.map((e) => e.key).join(',') || '无'}（默认跑法会把菜单档与太贵档一起测）`);
+  // 一条写着读数的理由，只有在**同一个底**上再量一次才谈得上逐数对账。底不同就不许它伪装成通过：
+  // 窄底（--quick 的 8 张）只发一条 NOTE，不产出行；宽底只查方向（越线只许多不许少、最大只许大不许小）。
+  for (const e of TOO_EXPENSIVE) {
+    const n = parseSize(e.key);
+    const t = tiers.get(n);
+    if (!t) continue; // 上面那条「本次都被重测」已经为它红过了
+    const maxNodes = t.nodes.length ? Math.max(...t.nodes) : -1;
+    if (SAMPLES < e.samples || ATTEMPTS < e.attempts) {
+      console.log(`NOTE B5 ${e.key} 的理由写的是 ${e.samples} 颗种子 × ${e.attempts} 个候选的底，本次是 ${SAMPLES} × ${ATTEMPTS} —— 本次不逐数复测（默认跑法会）`);
+      continue;
+    }
+    if (SAMPLES > e.samples || ATTEMPTS > e.attempts) {
+      report(`B5 ${e.key} 在更宽的底上不许把越线洗白`, t.attempts.overBudget >= e.over && maxNodes >= e.maxNodes,
+        `本次（${SAMPLES}×${ATTEMPTS}）越预算候选=${t.attempts.overBudget} 出货最大=${maxNodes}；理由（${e.samples}×${e.attempts}）= ${e.over} / ${e.maxNodes}。种子是 balance|档|序号，宽底包含窄底，所以这两个数只许变大`);
+      continue;
+    }
+    report(`B5 TOO_EXPENSIVE 不说谎 ${e.key}`, t.attempts.overBudget > 0,
+      `本次越预算候选 = ${t.attempts.overBudget}（理由写的 ${e.over}）；已不越线却还挂在菜单外 = 说谎`);
+    report(`B5 理由里的读数与本次一致 ${e.key}`,
+      t.attempts.overBudget === e.over && maxNodes === e.maxNodes,
+      `本次 越预算=${t.attempts.overBudget} 出货最大=${maxNodes}；理由 越预算=${e.over} 出货最大=${e.maxNodes}（底 ${SAMPLES}×${ATTEMPTS}）`);
+    // 句子是字段拼出来的，那这句子里的数就必须还是那几个字段：手改句子不改字段，在这里红。
+    const inReason = (e.reason.match(/\d[\d,]*/g) || []).map((s) => Number(s.replace(/,/g, '')));
+    report(`B5 理由句子与它自己的字段同一批数 ${e.key}`,
+      inReason.includes(e.samples) && inReason.includes(e.over) && inReason.includes(e.maxNodes) && inReason.includes(NODE_CAP),
+      `句子里的数 = ${inReason.join(',')}；字段 = ${e.samples},${e.over},${e.maxNodes},${NODE_CAP}`);
+  }
 }
 
 {

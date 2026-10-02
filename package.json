@@ -1,0 +1,32 @@
+{
+  "name": "z-biz-game-midloop-cos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "中点环 / Mid-loop（ミッドループ）— 在格心之间画一条不自交的闭环，让每一颗点都正好是它那段最长直线段的正中：奇数格的那一段中点落在格心，偶数格的那一段落在那条格线上。出货的每一盘都由独立穷举计数器在预算内数过唯一解，铅笔求解器在零猜测下能推到底（两道门都写在生成器里）。菜单档位与越线档位都读引擎的 SIZES / TOO_EXPENSIVE，页面不写死尺寸。默认端口 5281（server.cjs 的 DEFAULT_PORT）。",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.cjs",
+    "dev": "node server.cjs 5281",
+    "check": "for f in js/*.js js/*/*.js tools/*.mjs; do [ -e \"$f\" ] || continue; node --check \"$f\" || exit 1; done; node --check server.cjs && node --check tools/playtest.cjs && node --check tools/scenarios.js && bash -n tools/verify.sh && echo 'OK check'",
+    "test": "node tools/engine-test.mjs",
+    "test:quick": "node tools/engine-test.mjs --quick",
+    "balance": "node tools/balance.mjs",
+    "doctest": "node tools/doctest.mjs",
+    "verify": "bash tools/verify.sh"
+  },
+  "keywords": [
+    "game",
+    "puzzle",
+    "midloop",
+    "nikoli",
+    "loop",
+    "deduction",
+    "no-guess",
+    "unique-solution"
+  ],
+  "author": "z-biz-game",
+  "license": "MIT"
+}

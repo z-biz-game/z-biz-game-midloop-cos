@@ -15,9 +15,35 @@ import { countSolutions, NODE_CAP } from './count.js';
 import { solve } from './pencil.js';
 import { rngFor, shuffle } from './rng.js';
 
-/** 菜单档位由实测成本决定；越线的档位不进菜单，理由印在选择页上 */
-export const SIZES = ['5x5', '6x6', '7x7'];
-export const TOO_EXPENSIVE = [];
+/**
+ * 菜单档位由实测成本决定；越线的档位不进菜单，理由印在选择页上。
+ *
+ * 下面每一个数都是从 `node tools/balance.mjs` 的默认跑法（48 颗种子 × 每颗至多 3 个候选，
+ * 预算 NODE_CAP）里量出来的，不是手感：`samples/over/maxNodes` 三个数一起写，是因为
+ * B5 要把它们和本次跑出来的读数逐个对账（对不上就红，见 tools/balance.mjs 的「不说谎」那组）。
+ * 一条只写了句漂亮话、没有读数支撑的理由是不许存在的，所以这里由字段拼出句子，
+ * 而闸再检查句子与字段是不是同一批数。
+ *
+ * 8x8 留在菜单里：48 张抽样里 0 个候选越线，出货盘最大 857,553 节点（预算的 43%）。
+ * 9x9 / 10x10 请出菜单：越线的候选被生成器当场弃掉，所以「玩家拿到的一定是数得完的盘」
+ * 仍然成立，但这一档的成本分布已经不允许它作为一个**承诺**卖出去（线一个不挪）。
+ */
+function tooExpensive(key, samples, attempts, over, maxNodes) {
+  // 千分位自己拼，不用 toLocaleString：那句话要印在玩家的选择页上，也要被闸逐字符对账，
+  // 而 ICU 的分组规则随环境变（一个 locale 的差异就能让闸在别人机器上红）。
+  const grp = (v) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return {
+    key, samples, attempts, over, maxNodes,
+    reason: `${samples} 颗种子 × 每颗至多 ${attempts} 个候选的抽样里 ${over} 个候选在 ${grp(NODE_CAP)} 节点内证不完`
+      + `（该档出货盘最大 ${grp(maxNodes)} 节点）`,
+  };
+}
+
+export const SIZES = ['5x5', '6x6', '7x7', '8x8'];
+export const TOO_EXPENSIVE = [
+  tooExpensive('9x9', 48, 3, 1, 1020156),
+  tooExpensive('10x10', 48, 3, 3, 645560),
+];
 
 export const parseSize = (key) => {
   const m = /^(\d+)x(\d+)$/.exec(String(key));
