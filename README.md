@@ -200,6 +200,12 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 那一个位置，于是台架在对照组第一行都没跑出来的地方抛了 `ERR_FS_CP_EINVAL`（`_tmp-midloop-cpsync-crash.log`）。
 换成自己走树之后才有 `-r2`；跑完 `_sabotage-copy` 已被删掉，`ls` 读回 "No such file or directory"——
 留着最后一把刀改过的树，下一个读仓的人就会把副本当成真源。
+CI 上那一遍：run `37116756005` 的 browser job 第 6 步用 9 分 41 秒跑完并且 success
+（本机同一遍 3 分 47 秒——CI 的 runner 就是慢，同一个 job 里那两条浏览器腿也是同一台机器上跑的）。
+两个 job 的逐步耗时抄在 `_tmp-ci-steps-1003.log`，那份文件是从 Actions API 打印的，不是手记的。
+把上面这两句写进树里之后又跑了一遍，是 `_tmp-midloop-inrepo-r3.log`：`rows: 14` · 不符 0 把 ·
+`SAB_RC=0`，跑的端口与 `-r2` 同一组（5391/5393/9491，仍然是自己的端口，没去动别人占的 5281/5282/9381）——
+所以 commit 里的那棵树就是被这一遍量过的那棵树。
 
 台账 0 是前置对照：下刀之前 `doctest` 与 `engine-test` 两条都得 rc=0。树本来就是红的就别下刀，
 红树配红刀什么都证不了。
