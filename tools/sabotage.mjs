@@ -74,13 +74,20 @@ const KNIVES = [
     promise: '"有台账"与"有人跑台账"是两句话，后者也需要一把自己的刀' },
   // D11 那一组钉的是"门也在家门口"：下面两把分别回答「钉漂了会不会红」与「调用被摘掉会不会红」。
   { id: 'K15', name: 'verify.sh 的 doctest 钉被悄悄改小 1', file: 'tools/verify.sh',
-    needle: 'LOGIC_EXPECTS="doctest:54 sabotage:16"', repl: 'LOGIC_EXPECTS="doctest:53 sabotage:16"',
+    needle: 'LOGIC_EXPECTS="doctest:54 sabotage:17"', repl: 'LOGIC_EXPECTS="doctest:53 sabotage:17"',
     cmd: 'node', args: ['tools/doctest.mjs'], want: 'D11b',
     promise: '家门口的钉与本闸实跑项数是同一个数' },
   { id: 'K16', name: 'verify.sh 里跑 doctest 的那一条调用被摘掉', file: 'tools/verify.sh',
     needle: 'node "$HERE/tools/doctest.mjs" >"$LLOG" 2>&1\n', repl: '',
     cmd: 'node', args: ['tools/doctest.mjs'], want: 'D11d',
     promise: '三道逻辑闸在 verify.sh 里各有一条真调用（注释里提到路径不算调用）' },
+  // 手机视口闸的刀：把 44px 下限悄悄降成 40px——"够近了"正是这条下限存在的理由。
+  // 挑 40 而不是 30，是为了让红的只有那一条新断言（老的那条 >=34px 仍然过），归因才不含糊。
+  { id: 'K17', name: '44px 触摸下限被悄悄降成 40px', file: 'css/game.css',
+    needle: '  min-height: 44px !important;', repl: '  min-height: 40px !important;',
+    cmd: 'bash', args: ['tools/verify.sh'], env: { LEGS: 'touch', WD_TIMEOUT: '900' },
+    want: '手机视口：可见控件都到 44px 触摸下限',
+    promise: 'touch 腿在 390 视口下审整屏的 44px 下限与命中盒，不只审点名的那几枚按钮' },
 ];
 
 const sh = (cmd, args, env = {}) => {

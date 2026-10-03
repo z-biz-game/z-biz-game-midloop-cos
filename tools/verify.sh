@@ -36,7 +36,7 @@ rm -rf "$TMPD"; mkdir -p "$TMPD"
 # 钉的是每道闸自己的条数——rc=0 看不出闸变窄：删掉 20 条断言，剩下的照样绿，整道闸照样 exit 0。
 # 这两颗钉由 tools/doctest.mjs 的 D11 反向核对（它读的就是下面这一行），改一处不改另一处就是红。
 FAILED=0
-LOGIC_EXPECTS="doctest:54 sabotage:16"
+LOGIC_EXPECTS="doctest:54 sabotage:17"
 pin_of() { printf '%s\n' "$LOGIC_EXPECTS" | tr ' ' '\n' | grep "^$1:" | cut -d: -f2; }
 LLOG="$TMPD/logic.log"
 

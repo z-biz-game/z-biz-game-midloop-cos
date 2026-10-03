@@ -264,6 +264,30 @@ async function main() {
     }):[];
     return o;})()`;
 
+  // 手机视口下的整屏普查（只在 touch 腿里跑）：可见控件 = 有盒、没被 display/visibility/opacity
+  // 藏起来、也没被 pointer-events:none 弃权。逐个量 44px 下限，再滚进视野中央验命中盒。
+  const PHONE_AUDIT = `(()=>{
+    const de=document.documentElement;
+    const name=(e)=>e.id?('#'+e.id):((e.className&&typeof e.className==='string'
+      ? e.className.trim().split(/\\s+/)[0]+':' : '')+e.tagName.toLowerCase());
+    const vis=(e)=>{const r=e.getBoundingClientRect();const cs=getComputedStyle(e);
+      return r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'
+        &&parseFloat(cs.opacity)>0&&cs.pointerEvents!=='none';};
+    const all=[].slice.call(document.querySelectorAll(
+      'button,select,input,textarea,a[href],[role=button]')).filter(vis);
+    const tooSmall=[],unclickable=[];
+    for(const e of all){
+      const r=e.getBoundingClientRect();
+      if(r.width<44||r.height<44) tooSmall.push({id:name(e),w:Math.round(r.width),h:Math.round(r.height)});
+      e.scrollIntoView({block:'center',inline:'center'});
+      const b=e.getBoundingClientRect();
+      if(b.right>de.clientWidth+1||b.left<-1){unclickable.push({id:name(e),hit:'OFFSCREEN'});continue;}
+      const t=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);
+      if(!t||!(t===e||e.contains(t)||t.contains(e))) unclickable.push({id:name(e),hit:t?(t.id||t.tagName):'null'});
+    }
+    window.scrollTo(0,0);
+    return {scrollW:de.scrollWidth,clientW:de.clientWidth,ctl:all.length,tooSmall:tooSmall,unclickable:unclickable};})()`;
+
   // 盘的当前事实：笔迹串 + 引擎数出来的那几个形状量 + 门面报的笔/光标/锚点。
   const STATE = `(()=>{const m=window.midloop,g=m.game,en=m.engine;
     const s=g.encode();let nz=0;for(let i=0;i<s.length;i++)if(s[i]!=='0')nz++;
@@ -516,6 +540,17 @@ async function main() {
       eq('移动覆写在位：innerWidth 读回 390', p.iw, 390);
       eq('移动覆写在位：devicePixelRatio 读回 3', p.dpr, 3);
       ck('窄屏下棋盘仍在视口里', p.rect.l >= 0 && p.rect.w <= p.iw + 1, JSON.stringify({ rect: p.rect, iw: p.iw }));
+      // 这一腿代表"玩家真拿手机打开"，所以它审整屏，而不只是我点名要量的那几枚按钮：
+      // 44px 是 Apple HIG 的触摸下限（de90401 那次就是被 6 枚点不中的控件逼出来的），
+      // 横向溢出与遮挡在手机上都是"看不见/点不到"，不是"挤一点"。竖向出屏不算缺陷——玩家会滚。
+      const ph = await json(PHONE_AUDIT);
+      ck('手机视口：控件总数不是零（这条腿真的走到了可见控件）', ph.ctl > 0, JSON.stringify(ph.ctl));
+      ck('手机视口：页面不横向溢出（scrollWidth <= clientWidth）', ph.scrollW <= ph.clientW,
+        JSON.stringify({ scrollW: ph.scrollW, clientW: ph.clientW }));
+      eq('手机视口：可见控件都到 44px 触摸下限',
+        ph.tooSmall.map((c) => c.id + ' ' + c.w + 'x' + c.h).join(','), '');
+      eq('手机视口：可见控件中心点得到自己（没被遮挡、没横向出屏）',
+        ph.unclickable.map((c) => c.id + '=' + c.hit).join(','), '');
     }
 
     // ① 拖相邻两格 = 一段环边，一次手势 = 一步
