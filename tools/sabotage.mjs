@@ -189,8 +189,9 @@ for (const k of picked) {
   }
   const bad = k.probe ? !r.named : (r.rc === 0 || !r.named);
   rows.push({ k, ...r, bad });
-  const note = r.rc === 0 ? '（这一刀没把闸跑红）'
-    : (!r.named ? '（红了但没点名要的那条断言）' : '');
+  // 探针刀（K13 那种剂量刀）要的就是 rc=0：那句"没把闸跑红"打在它身上是一句反话。
+  const note = k.probe ? '' : (r.rc === 0 ? '（这一刀没把闸跑红）'
+    : (!r.named ? '（红了但没点名要的那条断言）' : ''));
   console.log(`${bad ? 'RED ' : 'ok  '} ${k.id} ${k.name} rc=${r.rc ?? '-'} ${r.line.slice(0, 120)}${note}`);
 }
 

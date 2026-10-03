@@ -74,7 +74,9 @@ elif [ "${SELF}" = "1" ]; then
 else
   MIDLOOP_VERIFY_INSIDE_LEDGER=1 node "$HERE/tools/sabotage.mjs" >"$LLOG" 2>&1
   SB_RC=$?
-  SB=$(sed -n 's/^rows: \([0-9]*\) 每刀都必须红（闸不红＝台账红）: \(yes\|NO\)$/\1\/\2/p' "$LLOG" | tail -1)
+  # BSD sed 的基本正则不认 `\|`：写成 `\(yes\|NO\)` 时这条 s/// 永远不命中，于是台账明明打了
+  # `rows: 16 …: yes`，门却报「未打印 rows:」。这里只数到第一个冒号后的整段，靠下面的等式判 yes。
+  SB=$(sed -n 's/^rows: \([0-9]*\).*: \(.*\)$/\1\/\2/p' "$LLOG" | tail -1)
   cat "$LLOG"   # 逐把读数打进整闸日志：$LLOG 末尾会被 rm -f，不留下来就只有那 6 行尾巴当证人
   if [ "$SB" != "$(pin_of sabotage)/yes" ]; then
     echo "台账体量 ${SB:-未打印 rows:} != 钉的 $(pin_of sabotage)/yes（rc=$SB_RC）—— 刀少了或某一刀没能把点名的断言逼红" >&2
