@@ -173,6 +173,7 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 | `node tools/balance.mjs` | check | `Size menu and hardness are still measured` |
 | `bash tools/verify.sh` | browser | `Browser gate, both local URL shapes` |
 | `GATE_SELFTEST=1 bash tools/verify.sh` | browser | `Gate proves it can fail` |
+| `node tools/sabotage.mjs` | browser | `Ledger doses every documented claim` |
 
 两个 job 的名字是 `syntax + engine guarantees`（node 20）与 `real browser gate (both URL shapes)`（node 22）。
 台架用的是 Node 22 才有的全局 `WebSocket`/`fetch`，在 20 上第一次 attach 就死在 `WebSocket is not defined`，
@@ -183,9 +184,22 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 
 上面每一行绿只说明这一次没抓到东西，不说明它抓得到。所以另有一本台账专门下刀：把文档里的现值改坏一个数字、
 把计数器的预算砍没、把页面上记步的那一句改翻倍，然后看闸是不是真的红、红的那一行是不是点得出自己的名字
-（红了却不说是哪条断言红的，算第二宗罪）。台账跑在工作区根目录的 `_tmp-midloop-dose.mjs`，日志
-`_tmp-midloop-dose-ledger.log`，重跑就是 `node _tmp-midloop-dose.mjs`。它读的是自己这一次的 rc，
-不转抄上一次的漂亮话；每一刀恢复后与备份逐字节比对，比对不过当场停。**它不进 CI**——CI 里没有第二棵树可以给它下刀。
+（红了却不说是哪条断言红的，算第二宗罪）。台账是仓里的 `tools/sabotage.mjs`，重跑就是 `npm run sabotage`。它此前住在工作区根目录的 `_tmp-midloop-dose.mjs`，
+那句话有两处不对：一是仓外的文件不进版本控制、CI 看不见、npm 调不到，于是"13 把刀逐条点名"只活在某一台机器的
+终端记录里；二是它在**真树**上原地改文件、靠备份逐字节恢复——一次 SIGKILL 就能把改坏的 README 留在几个人共用的
+工作树里。搬进仓里的同时换成副本作业：刀下在 `_sabotage-copy/`（`.gitignore` 里），真仓一个字节不动。
+它读的是自己这一次的 rc，不转抄上一次的漂亮话。**它现在进 CI**，而且是 browser job 的
+`Ledger doses every documented claim` 那一步——副本就是"第二棵树"，而 14 把里 K12 那条腿要真浏览器才能数得出
+翻倍的步数，放 check job 它会因为"这里没有 Chrome"而红得不讲道理。旧那台架整轮的读数住在
+`_tmp-midloop-dose-ledger.log`（13 把 / 全部点名 / `LEDGER_RC=0`），那是历史，不是这一次的成绩。
+这一次的成绩是 `_tmp-midloop-inrepo-r2.log`：**14 把 / 全部点名 / 与预期不符 0 / `SAB_RC=0`**，本机 3 分 47 秒
+（START/END 两行也在那份日志里，秒数是这两个时间戳相减）。跑它用的是自己的端口（`HTTP_PORT=5391`
+`HTTP_PORT2=5393` `CDP_PORT=9491`）——5281/5282/9381 当时被另一个会话的进程占着，不去杀别人的进程，
+端口由跑台账的命令当场挑（这一遍和 CI 那一遍都不是在 5281 上跑的）。
+`-r1` 不是一个成绩，是一具尸体：`cpSync` 在跑 filter 之前就判定"目标在源的子树里"，而副本必须落在仓内
+那一个位置，于是台架在对照组第一行都没跑出来的地方抛了 `ERR_FS_CP_EINVAL`（`_tmp-midloop-cpsync-crash.log`）。
+换成自己走树之后才有 `-r2`；跑完 `_sabotage-copy` 已被删掉，`ls` 读回 "No such file or directory"——
+留着最后一把刀改过的树，下一个读仓的人就会把副本当成真源。
 
 台账 0 是前置对照：下刀之前 `doctest` 与 `engine-test` 两条都得 rc=0。树本来就是红的就别下刀，
 红树配红刀什么都证不了。
@@ -205,6 +219,7 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 | K11 | 计数器的预算砍到 30 个节点 | `tools/engine-test.mjs` | `计数器在官方 5x5 上恰好数出 1` |
 | K12 | 页面上同一条边点两次记成两步 | `bash tools/verify.sh`（只跑 play 那条腿） | `步数 = 落下的笔数（同一条边点两次不虚记一步）` |
 | K13 | 这一行不是刀，是反向的：把名单里的六条红线各自单独打破一次 | `node tools/balance.mjs --dose`（底压到 6 张只为省机器） | 六条全部报「打中」，一条落空就是闸坏了 |
+| K14 | 把台账在 CI 里那一步换成 `echo "ledger not wired"`（台架还在、没人跑它） | `tools/doctest.mjs` | `D6e 破坏台账接进了 browser job、package.json 与 README` |
 
 K13 正是查出 B4 曾经恒真的那一次。出题器 `dig()` 从满线索起逐条摘、摘得动就摘，所以**出货盘按构造就是一条都
 摘不动**，而 B4 当时数的是生成器自报的那个数——自己和自己比，永远绿，剂量当场报

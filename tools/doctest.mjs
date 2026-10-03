@@ -10,7 +10,7 @@
 //   * 只比现值，不复测读数：med/p95/max 节点与毫秒是**观测值**，文档要把它们指向日志，
 //     这里只检查"代码里的界"与"文档写的数"之间的关系（D5b）；
 //   * 台账（README 的破坏试验一节）逐条验过这里的刀真的会红。
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -193,6 +193,23 @@ const npmCache = CI.split('\n').filter((l) => !/^\s*#/.test(l) && /cache:\s*'?np
 ok(npmRuns.length === 0 && npmCache.length === 0, 'D6d CI 里没有一行会装东西（零运行时依赖不是口号）',
   npmRuns.length || npmCache.length ? `装了：${[...npmRuns, ...npmCache].map((l) => l.trim()).join(' ｜ ')}`
     : '跑起来的那一行里没有 npm install/npm ci，也没让 setup-node 去缓存 npm');
+
+// 破坏台账（tools/sabotage.mjs）2026-10-03 之前住在仓外的 `_tmp-midloop-dose.mjs`：CI 看不见它、
+// npm 调不到它，于是 README 那句"13 把刀逐条点名"只活在某一台机器的终端记录里。搬进仓里之后，
+// "有人跑它"这句话得由四处一起撑着：browser job 的那一步 / package.json / README / 台架里那把
+// 专门砍这条接线的刀（K14）。少一处，台账就重新变回一段没人执行的代码——而这句话本身也必须能红，
+// 所以 K14 砍的是 ci.yml 那一处，其余三处仍然写着"有人在跑"。
+// verify.sh 故意不在名单里：本地验收门不该压上一整轮剂量（它自己那一轮的读数住在它自己的日志里）。
+const SAB = existsSync(join(ROOT, 'tools/sabotage.mjs')) ? read('tools/sabotage.mjs') : '';
+const sabWires = {
+  ci: /node tools\/sabotage\.mjs/.test(jobBlocks.browser || ''),
+  pkg: ((PKG.scripts || {}).sabotage || '').trim() === 'node tools/sabotage.mjs',
+  readme: /node tools\/sabotage\.mjs/.test(README),
+  knife: /D6e 破坏台账接进了/.test(SAB),
+};
+ok(Object.values(sabWires).every(Boolean),
+  'D6e 破坏台账接进了 browser job、package.json 与 README，而且这条接线自己有一把刀（砍掉任何一处它就只是一段代码）',
+  Object.entries(sabWires).map(([k, v]) => `${k}=${v ? '在' : '缺'}`).join(' · ') + (SAB ? '' : ' · 台架文件不在树里'));
 
 // ---- D7 默认抽样底：文档写的 == balance 的默认 == TOO_EXPENSIVE 那句理由的底 ----
 const baseDoc = (README.match(/默认 (\d+) 张 × (\d+) 个候选 × (\d+) 档/) || []);

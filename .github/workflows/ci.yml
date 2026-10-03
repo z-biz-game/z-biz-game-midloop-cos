@@ -80,3 +80,13 @@ jobs:
           tail -25 _tmp-selftest.log; grep -E '应有|点名吃下|ok 闸|RED' _tmp-selftest.log | tail -8
           [ "$rc" -ne 0 ] || { echo "SELFTEST 竟然全绿：这个闸证明不了自己会红"; exit 1; }
           grep -q 'FAIL' _tmp-selftest.log || { echo "SELFTEST 红了但没有点名是哪条断言"; exit 1; }
+
+      # 上面那些步说"断言现在绿"；这一道说"那些断言绿得住"。台账把文档/闸的每条"会红"的说法各打破一次，
+      # 刀口下在 `_sabotage-copy/` 副本上（真仓一个字节不动），每一把都必须 rc≠0 且红在它点名的那条断言上。
+      # 它到 2026-10-03 之前住在仓外的 `_tmp-midloop-dose.mjs`：不进版本控制、这个 workflow 看不见它。
+      # 为什么待在 browser job 而不是 check job：14 把里有一把（K12）的腿是 `verify.sh` 的 play 腿——
+      # 翻倍的步数只有真浏览器数得出来，放 check job 那一把会因为"这里没有 Chrome"而红得不讲道理。
+      - name: Ledger doses every documented claim
+        env:
+          WD_TIMEOUT: 900
+        run: node tools/sabotage.mjs
