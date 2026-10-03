@@ -16,7 +16,9 @@
     "balance": "node tools/balance.mjs",
     "doctest": "node tools/doctest.mjs",
     "sabotage": "node tools/sabotage.mjs",
-    "verify": "bash tools/verify.sh"
+    "verify": "bash tools/verify.sh",
+    "deploy-set": "node tools/deploy-set.mjs",
+    "deploy-set:selftest": "node tools/deploy-set-selftest.mjs"
   },
   "keywords": [
     "game",

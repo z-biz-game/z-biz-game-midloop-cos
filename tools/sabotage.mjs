@@ -21,6 +21,13 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const COPY = join(ROOT, '_sabotage-copy');
 
+// K15 的刀口从 verify.sh 现值读，不手抄那个数：手抄的那一把在钉被改动后命中 0 次，报的是
+// ERR「needle 命中 0 次」而不是红——一把守"钉漂了要红"的刀，自己先因为钉漂而不存在了。
+// 解析不出来时 cut() 依旧 0 命中，而那串回显在 ERR 行里的就是病因。
+const PIN_LINE = (readFileSync(join(ROOT, 'tools/verify.sh'), 'utf8').match(/^LOGIC_EXPECTS="[^"]*"/m) || [])[0];
+const PIN_DOCTEST = PIN_LINE ? Number((PIN_LINE.match(/doctest:(\d+)/) || [])[1]) : NaN;
+const PIN_OK = Number.isFinite(PIN_DOCTEST) && /sabotage:\d+/.test(PIN_LINE || '');
+
 // file/needle/repl 是刀口；cmd+args 是这把刀归谁管；want 是红必须点名叫出的那条断言里出现的串；
 // promise 是这把刀守的那句承诺（台账打印它，红在别处时一眼看得出刀与承诺脱节）。
 const KNIVES = [
@@ -74,7 +81,8 @@ const KNIVES = [
     promise: '"有台账"与"有人跑台账"是两句话，后者也需要一把自己的刀' },
   // D11 那一组钉的是"门也在家门口"：下面两把分别回答「钉漂了会不会红」与「调用被摘掉会不会红」。
   { id: 'K15', name: 'verify.sh 的 doctest 钉被悄悄改小 1', file: 'tools/verify.sh',
-    needle: 'LOGIC_EXPECTS="doctest:54 sabotage:18"', repl: 'LOGIC_EXPECTS="doctest:53 sabotage:18"',
+    needle: PIN_OK ? PIN_LINE : 'K15刀口：verify.sh 的钉行解析不到',
+    repl: PIN_OK ? PIN_LINE.replace(/doctest:\d+/, 'doctest:' + (PIN_DOCTEST - 1)) : 'K15刀口：没下成',
     cmd: 'node', args: ['tools/doctest.mjs'], want: 'D11b',
     promise: '家门口的钉与本闸实跑项数是同一个数' },
   { id: 'K16', name: 'verify.sh 里跑 doctest 的那一条调用被摘掉', file: 'tools/verify.sh',

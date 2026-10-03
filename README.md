@@ -179,6 +179,8 @@ npm run verify   # bash tools/verify.sh（先跑三道逻辑闸 engine-test / do
 | `node tools/engine-test.mjs` | check | `Engine tests` |
 | `node tools/doctest.mjs` | check | `Docs are asserted surface` |
 | `node tools/balance.mjs` | check | `Size menu and hardness are still measured` |
+| `node tools/deploy-set.mjs` | check | `Deploy set gate` |
+| `node tools/deploy-set-selftest.mjs` | check | `Deploy set gate proves it can fail` |
 | `bash tools/verify.sh` | browser | `Browser gate, both local URL shapes` |
 | `GATE_SELFTEST=1 bash tools/verify.sh` | browser | `Gate proves it can fail` |
 | `node tools/sabotage.mjs` | browser | `Ledger doses every documented claim` |
@@ -187,6 +189,43 @@ npm run verify   # bash tools/verify.sh（先跑三道逻辑闸 engine-test / do
 台架用的是 Node 22 才有的全局 `WebSocket`/`fetch`，在 20 上第一次 attach 就死在 `WebSocket is not defined`，
 一条断言都跑不到。CI 里没有 `npm install`——这仓零运行时依赖，为了"证明什么都没装"去拉一个打包器，
 换来的只是下一次网络抖动的红。
+
+## 上线的到底是哪一批文件
+
+这个仓没有打包器：站点=一次文件拷贝。以前"拷哪些"写在 `pages.yml` 的 `run:` 里，手抄三行
+（`index.html` + `css` + `js`）。本地 `index.html` 直读仓库根，永远自洽；线上却按那份清单拷，
+于是页面后来引用的 `manifest.webmanifest`、`sw.js`、`icons/*` 一个都没上去——线上五个 404，
+而仓里的引擎测试、真浏览器闸、台账全绿，因为它们跑的都是仓库根，没有任何一步在"清单只拷三个
+路径"的那个环境下加载过页面。
+
+现在清单只有一份，住在 `tools/assemble-site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
+然后**对拷出来的产物**提要求：
+
+- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble-site.sh <dir>` 这一行，
+  `ci.yml` 里必须真有 `run: node tools/deploy-set.mjs`。认的是调用那一行，不是文件里出现过这个
+  路径——注释里本来就会写它，只 grep 字符串会被一句散文喂绿。
+- **R 引用可达**：引用不靠手打名单。从 `index.html` 的 `href/src` 出发，凡解析出来是 `.js`/`.css`
+  的就把那一站也扫一遍（CSS 的 `url()`、JS 去掉注释后的 `'./…'` 字面量、`new URL(x, base)` 的两种
+  基、`navigator.serviceWorker.register`、`scope`），`manifest` 的 icons/screenshots/shortcuts 各自
+  的 `src` 也算引用。取径上读不到的那一站本身就是红（读不到＝这一站根本没扫）。每条引用都必须在
+  产物里且非 0 字节；绝对路径单列一条红，因为 Pages 挂在 `/<repo>/` 前缀下会跳出去。
+- **P 位图不许说谎**：`manifest` 声明的 `sizes` 必须等于 PNG IHDR 的真实宽高。
+- **钉住两个数**：`EXPECT_CHECKS=30`（R 段实际检查的路径条数）与 `EXPECT_ROWS=48`（这一次跑的
+  断言条数）。没改页面却掉了，说明解析断了；删掉一张图标会同时少一条 R10 与那张的 P1/P2——
+  所以两个数一起钉，rows 能漂就是闸在缩水的信号。
+
+`tools/deploy-set-selftest.mjs` 是这两颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
+各下一刀（X1 清单不收位图目录 / X2 模块边改名 / X3 CSS 写绝对路径 / X4 `start_url` 绝对 /
+X5 删光 >=512 图标 / X6 少一个必填字段 / X7 声明尺寸与真图不符 / X8 workflow 不调脚本 /
+X9 CI 不跑闸），要求每一刀都让闸**点名**变红；X10 是阴性对照——往入口 JS 追加一行只写在注释里
+的假路径，闸必须仍然绿、条数仍然 30、rows 仍然 48。靶子从 `DEPLOY_SET_DUMP=1` 的出处表现挑，
+所以页面改了、仓与仓不同，台架跟着走。本轮读数：闸 `DS_RC=0`（30 条引用 / 48 断言 / 3 张位图），
+台架 `DS_SELFTEST rc=0`（10 刀逐条点名），日志 `_tmp-midloop-deploy-set-r3.log` 与
+`_tmp-midloop-deploy-set-selftest-r3.log`。
+
+`npm run deploy-set` 与 `npm run deploy-set:selftest` 是同两条命令的本地入口；把它们接进
+`tools/verify.sh` 那条浏览器 one-shot 还欠着（那道脚本的腿名单与条数钉是本仓自己的形状，
+逐仓改，不在这一轮）。
 
 ## 破坏试验台账（"会红"这句话本身也得被证一次）
 
