@@ -287,6 +287,38 @@ ok(dosed.length >= 4 && !!doseDoc && doseList.slice().sort().join(',') === dosed
   `D10c 文档写的剂量覆盖面等于 --dose 里的剂量项（${dosed.sort().join(' ')}）`,
   doseDoc ? `文档 ${doseList.join('/')} vs 脚本 ${dosed.join('/')}` : '解析不到那一句');
 
+// ---- D11 「门也在家门口」：verify.sh 现在自己跑三道逻辑闸，那两颗条数钉要有独立证人 ----
+// 搬门的代价是新造了一个说谎面：verify.sh 里 `LOGIC_EXPECTS` 那个数是我手抄的，而本闸的项数
+// 会跟着我改断言自己长。只写在脚本里的数，除了本闸没人核对——所以钉要被本闸反向核对，漂 1 就红。
+const pinBlock = (VERIFY.match(/^LOGIC_EXPECTS="([^"]+)"/m) || [])[1] || '';
+const pins = Object.fromEntries(pinBlock.split(/\s+/).filter(Boolean).map((kv) => kv.split(':')));
+ok(Object.keys(pins).length === 2 && !!pins.doctest && !!pins.sabotage,
+  'D11a verify.sh 里解析到 LOGIC_EXPECTS 那一行，而且正好两颗钉（doctest / sabotage）',
+  pinBlock || 'verify.sh 里没有 LOGIC_EXPECTS 那一行');
+const knives = (SAB.match(/^\s*\{ id: '(K\d+)'/gm) || []).length;
+ok(!!pins.sabotage && +pins.sabotage === knives,
+  `D11c verify.sh 钉的刀数等于台架源码里现数的刀数（${knives} 把）`,
+  `钉 ${pins.sabotage || '无'} · 现数 ${knives}`);
+const gateCalls = VERIFY.split('\n')
+  .filter((l) => !/^\s*#/.test(l))
+  .map((l) => l.replace(/^\s*(?:[A-Z][A-Z0-9_]*=\S*\s+)+/, ''))
+  .filter((l) => /^(?:node|bash|python3)\s/.test(l));
+const runs = (tool) => gateCalls.filter((l) => l.includes('tools/' + tool)).length;
+const trio = [['engine-test.mjs', runs('engine-test.mjs')], ['doctest.mjs', runs('doctest.mjs')],
+  ['sabotage.mjs', runs('sabotage.mjs')]];
+ok(trio.every(([, n]) => n === 1),
+  'D11d 三道逻辑闸在 verify.sh 里各有一条真调用（注释里提到路径不算调用）',
+  trio.map(([t, n]) => `${t}=${n}`).join(' · '));
+// D11b 与 D11e 排在最后：它们要拿本闸的总项数与全部刀的名录对账，上面那三条已经计入 rows。
+const finalRows = rows + 2;
+ok(!!pins.doctest && +pins.doctest === finalRows,
+  `D11b verify.sh 钉的 doctest 项数等于本闸实跑的项数（${finalRows}，含 D11 这五条）`,
+  `钉 ${pins.doctest || '无'} · 实跑 ${finalRows}`);
+const docKnives = [...new Set([...README.matchAll(/^\| (K\d+) \|/gm)].map((m) => m[1]))];
+ok(docKnives.length === knives,
+  `D11e README 逐枪表解析到的刀数等于台账源码现数的刀数（${knives} 把）`,
+  `文档 ${docKnives.length}（${docKnives.sort().join(' ')}） vs 台架 ${knives}`);
+
 console.log(`\n合计 ${rows} 项，${fail.length} 项失败`);
 console.log(`rows: ${rows} fail: ${fail.length}`);
 if (fail.length) {

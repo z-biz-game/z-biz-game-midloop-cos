@@ -137,12 +137,20 @@ npm run dev      # node server.cjs 5281
 npm test         # node tools/engine-test.mjs（纯 node，判据 1/2 的正面证据 + 三组反空转对照）
 npm run balance  # node tools/balance.mjs（红线 B1/B2/B3/B3b/B4/B5/B6，默认 48 张 × 3 个候选 × 6 档）
 npm run doctest  # node tools/doctest.mjs（本文与 DESIGN 里每一个现值都等于代码的现在值）
-npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形态）
+npm run verify   # bash tools/verify.sh（先跑三道逻辑闸 engine-test / doctest / 台账，再上真 Chrome + 裸 CDP，两种 URL 形态）
 ```
 
 端口：本地 5281 · 前缀形态 5282 · CDP 9381（`tools/verify.sh` 起**两个** server：第二个的根目录是一个
 只放着 `z-biz-game-midloop-cos` 软链的临时目录，所以 `/z-biz-game-midloop-cos/` 这个前缀是真挂在 URL 上的，
 不是同一个 server 顺手兜底兜出来的——写死绝对路径在线会 404 的写法在这里一样会红）。零运行时依赖，CI 里没有 `npm install`。
+
+本地那句"全绿"以前是半句话：`bash tools/verify.sh` 只上浏览器，而 engine-test / doctest / 台账是 CI 独有的门——
+在家里改闸的人看不见它们在 CI 里红的那一条。现在这三道排在找 Chrome 之前，两边同一把门。门搬进来也带来一个新的
+说谎面：verify.sh 里那两颗条数钉是手抄的，而 doctest 的项数会跟着断言自己长。所以钉由本闸反向核对（D11 那一组），
+而"钉被悄悄改小会不会红""跑 doctest 的那一条调用被摘掉会不会红"各有一把刀（下面逐枪表里的 K15/K16）。
+那两颗数只住在 `tools/verify.sh` 的 `LOGIC_EXPECTS` 一行上，本文不抄它——抄了就要靠下一次复跑来推翻。
+`GATE_SELFTEST=1` 那一跑会跳过台账：它给浏览器腿种的是注定错的期望，那种红会把每一把刀的 rc 都变成非 0，
+刀的证据就不归因于刀了。
 
 ## 门禁清单
 
@@ -152,7 +160,7 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 | 引擎保证 | `node tools/engine-test.mjs` | 判据 1/2 的正面证据 + 三组反空转对照（0 解 / 8 解 / 金标准环数）+ 两套编码的约定对齐 | 32 checks, 0 failed（`_tmp-midloop-engine-test-final.log`） |
 | 红线 | `node tools/balance.mjs` | 出盘率、零猜测推满、计数器复数恰好 1、两排序逐张同解、线索最小（balance 自己重数一遍再和生成器自报的对账）、菜单与 `TOO_EXPENSIVE` 不说谎、无装饰性规则 | 40 条全绿（`_tmp-midloop-balance-final48.log`） |
 | 文档 | `node tools/doctest.mjs` | 本文与 DESIGN 印出去的每一个现值 | 见下面"哪条命令在 CI 里" |
-| 真浏览器闸 | `bash tools/verify.sh` | DOM 文本/几何、画布像素、真输入事件、存档与续局、两种 URL 形态 | 全绿（`_tmp-midloop-verify-shapes.log`） |
+| 真浏览器闸 | `bash tools/verify.sh` | 先跑三道逻辑闸（engine-test / doctest / 台账，各自的条数钉在脚本的 `LOGIC_EXPECTS` 一行上），再上真 Chrome：DOM 文本/几何、画布像素、真输入事件、存档与续局、两种 URL 形态 | 全绿（`_tmp-midloop-verify-shapes.log`） |
 | 阴性自证 | `GATE_SELFTEST=1 bash tools/verify.sh` | 闸必须能被证明**会红** | rc＝1，32/32 份报告各自点名吃下种下的错（`_tmp-midloop-verify-selftest.log`） |
 
 ### 浏览器闸的形状（这几个数由 `tools/verify.sh` 现值推出来，`doctest.mjs` 逐数对账）
@@ -189,7 +197,7 @@ npm run verify   # bash tools/verify.sh（真 Chrome + 裸 CDP，两种 URL 形�
 终端记录里；二是它在**真树**上原地改文件、靠备份逐字节恢复——一次 SIGKILL 就能把改坏的 README 留在几个人共用的
 工作树里。搬进仓里的同时换成副本作业：刀下在 `_sabotage-copy/`（`.gitignore` 里），真仓一个字节不动。
 它读的是自己这一次的 rc，不转抄上一次的漂亮话。**它现在进 CI**，而且是 browser job 的
-`Ledger doses every documented claim` 那一步——副本就是"第二棵树"，而 14 把里 K12 那条腿要真浏览器才能数得出
+`Ledger doses every documented claim` 那一步——副本就是"第二棵树"，而名单里 K12 那条腿要真浏览器才能数得出
 翻倍的步数，放 check job 它会因为"这里没有 Chrome"而红得不讲道理。旧那台架整轮的读数住在
 `_tmp-midloop-dose-ledger.log`（13 把 / 全部点名 / `LEDGER_RC=0`），那是历史，不是这一次的成绩。
 这一次的成绩是 `_tmp-midloop-inrepo-r2.log`：**14 把 / 全部点名 / 与预期不符 0 / `SAB_RC=0`**，本机 3 分 47 秒
@@ -206,6 +214,12 @@ CI 上那一遍：run `37116756005` 的 browser job 第 6 步用 9 分 41 秒跑
 把上面这两句写进树里之后又跑了一遍，是 `_tmp-midloop-inrepo-r3.log`：`rows: 14` · 不符 0 把 ·
 `SAB_RC=0`，跑的端口与 `-r2` 同一组（5391/5393/9491，仍然是自己的端口，没去动别人占的 5281/5282/9381）——
 所以 commit 里的那棵树就是被这一遍量过的那棵树。
+
+把 CI 独有的三道逻辑闸搬进 `verify.sh`、并给那两颗钉配上自己的刀（K15/K16）之后，台账就在本地整闸那一跑里
+跟着走了一遍：`_tmp-midloop-verify-r1.log` 的第一段是它的逐把读数（脚本把台账的 stdout 整段打进日志，
+不是只留 6 行尾巴），首尾 `START=`/`END=`，`VERIFY_RC=` 与 `DIRTY_AFTER=` 由跑它的命令追加进同一份文件。
+本文不抄它这一轮的逐把读数——刀数由 D11c（对 `tools/sabotage.mjs` 源码现数）与 D11e（对上面的逐枪表）双向对账，
+抄一份数字进文档只是多造一处会漂的地方。
 
 台账 0 是前置对照：下刀之前 `doctest` 与 `engine-test` 两条都得 rc=0。树本来就是红的就别下刀，
 红树配红刀什么都证不了。
@@ -226,6 +240,8 @@ CI 上那一遍：run `37116756005` 的 browser job 第 6 步用 9 分 41 秒跑
 | K12 | 页面上同一条边点两次记成两步 | `bash tools/verify.sh`（只跑 play 那条腿） | `步数 = 落下的笔数（同一条边点两次不虚记一步）` |
 | K13 | 这一行不是刀，是反向的：把名单里的六条红线各自单独打破一次 | `node tools/balance.mjs --dose`（底压到 6 张只为省机器） | 六条全部报「打中」，一条落空就是闸坏了 |
 | K14 | 把台账在 CI 里那一步换成 `echo "ledger not wired"`（台架还在、没人跑它） | `tools/doctest.mjs` | `D6e 破坏台账接进了 browser job、package.json 与 README` |
+| K15 | 把 `verify.sh` 里钉的 doctest 项数悄悄改小 1（家门口的钉与本闸脱钩） | `tools/doctest.mjs` | `D11b verify.sh 钉的 doctest 项数等于本闸实跑的项数` |
+| K16 | 把 `verify.sh` 里跑 doctest 的那一条调用摘掉（门还在 CI 里、家里没人跑它） | `tools/doctest.mjs` | `D11d 三道逻辑闸在 verify.sh 里各有一条真调用` |
 
 K13 正是查出 B4 曾经恒真的那一次。出题器 `dig()` 从满线索起逐条摘、摘得动就摘，所以**出货盘按构造就是一条都
 摘不动**，而 B4 当时数的是生成器自报的那个数——自己和自己比，永远绿，剂量当场报

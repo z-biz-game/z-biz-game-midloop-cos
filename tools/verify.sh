@@ -29,6 +29,62 @@ HTTP2=${HTTP_PORT2:-5282}
 SELF=${GATE_SELFTEST:-0}
 TMPD="$HERE/_tmp-verify"
 rm -rf "$TMPD"; mkdir -p "$TMPD"
+
+# ---- 逻辑闸（纯 node，不开浏览器）：排在找 Chrome、起服务之前 ----
+# CI 的 check job 跑 engine-test 与 doctest，台账在 browser job 里另有一步，而这一道本地
+# one-shot 以前一步都不跑：改闸的人在家里看见的绿，和 CI 那套绿不是同一套。门要两边同一把。
+# 钉的是每道闸自己的条数——rc=0 看不出闸变窄：删掉 20 条断言，剩下的照样绿，整道闸照样 exit 0。
+# 这两颗钉由 tools/doctest.mjs 的 D11 反向核对（它读的就是下面这一行），改一处不改另一处就是红。
+FAILED=0
+LOGIC_EXPECTS="doctest:54 sabotage:16"
+pin_of() { printf '%s\n' "$LOGIC_EXPECTS" | tr ' ' '\n' | grep "^$1:" | cut -d: -f2; }
+LLOG="$TMPD/logic.log"
+
+node "$HERE/tools/engine-test.mjs" >"$LLOG" 2>&1
+ET_RC=$?
+ET=$(sed -n 's/^\([0-9]*\) checks, \([0-9]*\) failed$/\1\/\2/p' "$LLOG" | tail -1)
+if [ -z "$ET" ]; then
+  echo "逻辑闸 engine-test：没打印「N checks, M failed」这一行（rc=$ET_RC），分不清跑完了还是没有" >&2
+  tail -20 "$LLOG" >&2; FAILED=1
+elif [ "$ET_RC" != 0 ] || [ "${ET#*/}" != 0 ]; then
+  echo "逻辑闸 engine-test 红：$ET（rc=$ET_RC）" >&2; FAILED=1
+else
+  echo "逻辑闸 engine-test：${ET%/*} 条检查、0 失败 ✓"
+fi
+
+node "$HERE/tools/doctest.mjs" >"$LLOG" 2>&1
+DS_RC=$?
+DS=$(sed -n 's/^rows: \([0-9]*\) fail: \([0-9]*\)$/\1\/\2/p' "$LLOG" | tail -1)
+grep -E '^  未过：' "$LLOG" | head -25
+if [ "$DS" != "$(pin_of doctest)/0" ]; then
+  echo "逻辑闸 doctest 体量 ${DS:-未打印 rows:} != 钉的 $(pin_of doctest)/0（rc=$DS_RC）—— 增删一条断言要同时改 LOGIC_EXPECTS 与 D11b" >&2
+  FAILED=1
+else
+  echo "逻辑闸 doctest：$(pin_of doctest) 项、0 项失败 ✓"
+fi
+
+# 台账有一把刀会真叫 tools/verify.sh（LEGS=play），而 verify.sh 现在自己也叫台账：
+# 不给嵌套那一层设哨兵就是闸与刀互相调用，谁都不肯先收口。env 由 sabotage.mjs 派发时设上。
+# 阴性自证那一跑也跳过：SELF=1 给浏览器腿种的是注定错的期望，每一把刀的 rc 都会因此非 0，
+# 于是"红"不再归因于刀——台账要在干净的树上量，这才是它自己那句承诺。
+if [ -n "${MIDLOOP_VERIFY_INSIDE_LEDGER:-}" ]; then
+  echo "台账：跳过（这一层是台账自己叫起的 verify.sh）"
+elif [ "${SELF}" = "1" ]; then
+  echo "台账：跳过（GATE_SELFTEST 这一跑的浏览器腿本来就红，刀的红没有归因）"
+else
+  MIDLOOP_VERIFY_INSIDE_LEDGER=1 node "$HERE/tools/sabotage.mjs" >"$LLOG" 2>&1
+  SB_RC=$?
+  SB=$(sed -n 's/^rows: \([0-9]*\) 每刀都必须红（闸不红＝台账红）: \(yes\|NO\)$/\1\/\2/p' "$LLOG" | tail -1)
+  cat "$LLOG"   # 逐把读数打进整闸日志：$LLOG 末尾会被 rm -f，不留下来就只有那 6 行尾巴当证人
+  if [ "$SB" != "$(pin_of sabotage)/yes" ]; then
+    echo "台账体量 ${SB:-未打印 rows:} != 钉的 $(pin_of sabotage)/yes（rc=$SB_RC）—— 刀少了或某一刀没能把点名的断言逼红" >&2
+    FAILED=1
+  else
+    echo "台账：$(pin_of sabotage) 把刀各自逼红了点名的断言 ✓"
+  fi
+fi
+rm -f "$LLOG"
+
 CHROME=${CHROME_BIN:-}
 if [ -z "$CHROME" ]; then
   for c in "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
@@ -88,7 +144,8 @@ cleanup() {
 trap cleanup EXIT
 ( sleep ${WD_TIMEOUT:-2400}; cleanup ) </dev/null >/dev/null 2>&1 & WD=$!
 
-FAILED=0
+# FAILED 在逻辑闸那一节就置过 0：这里再重置一次，等于把逻辑闸的红冲掉再开始浏览器段，
+# 「本地全绿」就又是一句假话。
 REPORTS="$TMPD/reports.txt"; : >"$REPORTS"; export REPORTS
 LEGS=${LEGS:-core play win mouse touch keys save}
 

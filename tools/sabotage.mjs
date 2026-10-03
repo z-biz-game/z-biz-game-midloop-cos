@@ -72,6 +72,15 @@ const KNIVES = [
     needle: 'run: node tools/sabotage.mjs', repl: 'run: echo "ledger not wired"',
     cmd: 'node', args: ['tools/doctest.mjs'], want: 'D6e 破坏台账接进了',
     promise: '"有台账"与"有人跑台账"是两句话，后者也需要一把自己的刀' },
+  // D11 那一组钉的是"门也在家门口"：下面两把分别回答「钉漂了会不会红」与「调用被摘掉会不会红」。
+  { id: 'K15', name: 'verify.sh 的 doctest 钉被悄悄改小 1', file: 'tools/verify.sh',
+    needle: 'LOGIC_EXPECTS="doctest:54 sabotage:16"', repl: 'LOGIC_EXPECTS="doctest:53 sabotage:16"',
+    cmd: 'node', args: ['tools/doctest.mjs'], want: 'D11b',
+    promise: '家门口的钉与本闸实跑项数是同一个数' },
+  { id: 'K16', name: 'verify.sh 里跑 doctest 的那一条调用被摘掉', file: 'tools/verify.sh',
+    needle: 'node "$HERE/tools/doctest.mjs" >"$LLOG" 2>&1\n', repl: '',
+    cmd: 'node', args: ['tools/doctest.mjs'], want: 'D11d',
+    promise: '三道逻辑闸在 verify.sh 里各有一条真调用（注释里提到路径不算调用）' },
 ];
 
 const sh = (cmd, args, env = {}) => {
