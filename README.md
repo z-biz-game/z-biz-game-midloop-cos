@@ -243,6 +243,7 @@ CI 上那一遍：run `37116756005` 的 browser job 第 6 步用 9 分 41 秒跑
 | K15 | 把 `verify.sh` 里钉的 doctest 项数悄悄改小 1（家门口的钉与本闸脱钩） | `tools/doctest.mjs` | `D11b verify.sh 钉的 doctest 项数等于本闸实跑的项数` |
 | K16 | 把 `verify.sh` 里跑 doctest 的那一条调用摘掉（门还在 CI 里、家里没人跑它） | `tools/doctest.mjs` | `D11d 三道逻辑闸在 verify.sh 里各有一条真调用` |
 | K17 | 把 44px 触摸下限悄悄降成 40px（"够近了"） | `bash tools/verify.sh`（只跑 touch 那条腿，390×844 覆写在位） | `手机视口：可见控件都到 44px 触摸下限` |
+| K18 | 把"盘内格不参与 44px"的豁免从 `#board` 放宽到整页（豁免写宽＝手机腿空转） | `bash tools/verify.sh`（只跑 touch 那条腿） | `手机视口：控件总数不是零` |
 
 K13 正是查出 B4 曾经恒真的那一次。出题器 `dig()` 从满线索起逐条摘、摘得动就摘，所以**出货盘按构造就是一条都
 摘不动**，而 B4 当时数的是生成器自报的那个数——自己和自己比，永远绿，剂量当场报

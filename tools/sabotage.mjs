@@ -74,7 +74,7 @@ const KNIVES = [
     promise: '"有台账"与"有人跑台账"是两句话，后者也需要一把自己的刀' },
   // D11 那一组钉的是"门也在家门口"：下面两把分别回答「钉漂了会不会红」与「调用被摘掉会不会红」。
   { id: 'K15', name: 'verify.sh 的 doctest 钉被悄悄改小 1', file: 'tools/verify.sh',
-    needle: 'LOGIC_EXPECTS="doctest:54 sabotage:17"', repl: 'LOGIC_EXPECTS="doctest:53 sabotage:17"',
+    needle: 'LOGIC_EXPECTS="doctest:54 sabotage:18"', repl: 'LOGIC_EXPECTS="doctest:53 sabotage:18"',
     cmd: 'node', args: ['tools/doctest.mjs'], want: 'D11b',
     promise: '家门口的钉与本闸实跑项数是同一个数' },
   { id: 'K16', name: 'verify.sh 里跑 doctest 的那一条调用被摘掉', file: 'tools/verify.sh',
@@ -88,6 +88,15 @@ const KNIVES = [
     cmd: 'bash', args: ['tools/verify.sh'], env: { LEGS: 'touch', WD_TIMEOUT: '900' },
     want: '手机视口：可见控件都到 44px 触摸下限',
     promise: 'touch 腿在 390 视口下审整屏的 44px 下限与命中盒，不只审点名的那几枚按钮' },
+  // 排除规则必须有它自己的反空转刀：盘内格不参与 44px，这条豁免一旦写宽到"整页都算盘内"，
+  // 手机腿就会读成"一个可见控件都没有"——那既不是 44px 违规也不是遮挡，而是一条谁都不红的空转。
+  // 所以豁免吞掉全部时必须撞「控件总数不是零」。
+  { id: 'K18', name: '盘内豁免从 #board 悄悄放宽成整页', file: 'tools/playtest.cjs',
+    needle: `const inBoard=(e)=>!!(e.closest&&e.closest('#board, .board, [data-board]'));`,
+    repl: `const inBoard=(e)=>!!(e.closest&&e.closest('*'));`,
+    cmd: 'bash', args: ['tools/verify.sh'], env: { LEGS: 'touch', WD_TIMEOUT: '900' },
+    want: '手机视口：控件总数不是零',
+    promise: '「盘内不参与 44px」这条豁免吞不掉外壳控件：吞掉时 chrome 计数当场归零' },
 ];
 
 const sh = (cmd, args, env = {}) => {

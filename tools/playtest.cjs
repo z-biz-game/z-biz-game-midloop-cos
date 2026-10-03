@@ -275,8 +275,15 @@ async function main() {
         &&parseFloat(cs.opacity)>0&&cs.pointerEvents!=='none';};
     const all=[].slice.call(document.querySelectorAll(
       'button,select,input,textarea,a[href],[role=button]')).filter(vis);
+    // 44px 是外壳控件（按钮、开关、输入框）的下限。盘上的格子跟着视口活：一张 9x9 在 320px
+    // 上只有 36px，硬套下限等于逼着盘面横向出屏——那才是手机上真正的"点不到"。
+    // 所以盘内不参与 44px 判定，但要报数：读得出盘内有几格、最小边多少，才看得出排除有没有把
+    // 外壳也一起吞掉（吞掉的话 chrome 数当场变零，那条断言就红）。
+    const inBoard=(e)=>!!(e.closest&&e.closest('#board, .board, [data-board]'));
+    const chrome=all.filter((e)=>!inBoard(e));
+    const cells=all.filter(inBoard);
     const tooSmall=[],unclickable=[];
-    for(const e of all){
+    for(const e of chrome){
       const r=e.getBoundingClientRect();
       if(r.width<44||r.height<44) tooSmall.push({id:name(e),w:Math.round(r.width),h:Math.round(r.height)});
       e.scrollIntoView({block:'center',inline:'center'});
@@ -286,7 +293,10 @@ async function main() {
       if(!t||!(t===e||e.contains(t)||t.contains(e))) unclickable.push({id:name(e),hit:t?(t.id||t.tagName):'null'});
     }
     window.scrollTo(0,0);
-    return {scrollW:de.scrollWidth,clientW:de.clientWidth,ctl:all.length,tooSmall:tooSmall,unclickable:unclickable};})()`;
+    const cellMin=cells.length?Math.round(Math.min.apply(null,cells.map((e)=>{const r=e.getBoundingClientRect();
+      return Math.min(r.width,r.height);}))):null;
+    return {scrollW:de.scrollWidth,clientW:de.clientWidth,ctl:chrome.length,boardCells:cells.length,
+      cellMin:cellMin,tooSmall:tooSmall,unclickable:unclickable};})()`;
 
   // 盘的当前事实：笔迹串 + 引擎数出来的那几个形状量 + 门面报的笔/光标/锚点。
   const STATE = `(()=>{const m=window.midloop,g=m.game,en=m.engine;
@@ -544,7 +554,8 @@ async function main() {
       // 44px 是 Apple HIG 的触摸下限（de90401 那次就是被 6 枚点不中的控件逼出来的），
       // 横向溢出与遮挡在手机上都是"看不见/点不到"，不是"挤一点"。竖向出屏不算缺陷——玩家会滚。
       const ph = await json(PHONE_AUDIT);
-      ck('手机视口：控件总数不是零（这条腿真的走到了可见控件）', ph.ctl > 0, JSON.stringify(ph.ctl));
+      ck('手机视口：控件总数不是零（这条腿真的走到了可见控件）', ph.ctl > 0,
+        JSON.stringify({ chrome: ph.ctl, boardCells: ph.boardCells, cellMin: ph.cellMin }));
       ck('手机视口：页面不横向溢出（scrollWidth <= clientWidth）', ph.scrollW <= ph.clientW,
         JSON.stringify({ scrollW: ph.scrollW, clientW: ph.clientW }));
       eq('手机视口：可见控件都到 44px 触摸下限',
