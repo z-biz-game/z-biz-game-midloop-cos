@@ -21,7 +21,7 @@
 #  * macOS 没有 timeout：看门狗用后台子 shell + trap（下面的 WD）。
 set -u
 HERE=$(cd "$(dirname "$0")/.." && pwd)
-PORT=${CDP_PORT:-9381}
+PORT=${CDP_PORT:-9381}; if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then echo ":$PORT is already LISTENING — a sibling gate or an orphan Chrome holds it; attaching there reads someone else's browser. Wait for it to finish, or rerun with CDP_PORT=<a free port>." >&2; lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >&2 || true; exit 6; fi  # 一机一台：撞在同一个默认口上时不报错的是 Chrome，报错的是绿——先让路再开闸
 # 5281/5282 是本仓自己的端口；别的 agent 同时在跑各自仓的 verify.sh，端口撞了就会拿到"另一个仓"的
 # index.html，那种绿比红更糟。
 HTTP=${HTTP_PORT:-5281}
