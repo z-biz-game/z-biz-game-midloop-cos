@@ -44,10 +44,10 @@ node "$HERE/tools/engine-test.mjs" >"$LLOG" 2>&1
 ET_RC=$?
 ET=$(sed -n 's/^\([0-9]*\) checks, \([0-9]*\) failed$/\1\/\2/p' "$LLOG" | tail -1)
 if [ -z "$ET" ]; then
-  echo "逻辑闸 engine-test：没打印「N checks, M failed」这一行（rc=$ET_RC），分不清跑完了还是没有" >&2
+  echo "逻辑闸 engine-test：没打印「N checks, M failed」这一行（rc=${ET_RC}），分不清跑完了还是没有" >&2
   tail -20 "$LLOG" >&2; FAILED=1
 elif [ "$ET_RC" != 0 ] || [ "${ET#*/}" != 0 ]; then
-  echo "逻辑闸 engine-test 红：$ET（rc=$ET_RC）" >&2; FAILED=1
+  echo "逻辑闸 engine-test 红：${ET}（rc=${ET_RC}）" >&2; FAILED=1
 else
   echo "逻辑闸 engine-test：${ET%/*} 条检查、0 失败 ✓"
 fi
@@ -57,7 +57,7 @@ DS_RC=$?
 DS=$(sed -n 's/^rows: \([0-9]*\) fail: \([0-9]*\)$/\1\/\2/p' "$LLOG" | tail -1)
 grep -E '^  未过：' "$LLOG" | head -25
 if [ "$DS" != "$(pin_of doctest)/0" ]; then
-  echo "逻辑闸 doctest 体量 ${DS:-未打印 rows:} != 钉的 $(pin_of doctest)/0（rc=$DS_RC）—— 增删一条断言要同时改 LOGIC_EXPECTS 与 D11b" >&2
+  echo "逻辑闸 doctest 体量 ${DS:-未打印 rows:} != 钉的 $(pin_of doctest)/0（rc=${DS_RC}）—— 增删一条断言要同时改 LOGIC_EXPECTS 与 D11b" >&2
   FAILED=1
 else
   echo "逻辑闸 doctest：$(pin_of doctest) 项、0 项失败 ✓"
@@ -79,7 +79,7 @@ else
   SB=$(sed -n 's/^rows: \([0-9]*\).*: \(.*\)$/\1\/\2/p' "$LLOG" | tail -1)
   cat "$LLOG"   # 逐把读数打进整闸日志：$LLOG 末尾会被 rm -f，不留下来就只有那 6 行尾巴当证人
   if [ "$SB" != "$(pin_of sabotage)/yes" ]; then
-    echo "台账体量 ${SB:-未打印 rows:} != 钉的 $(pin_of sabotage)/yes（rc=$SB_RC）—— 刀少了或某一刀没能把点名的断言逼红" >&2
+    echo "台账体量 ${SB:-未打印 rows:} != 钉的 $(pin_of sabotage)/yes（rc=${SB_RC}）—— 刀少了或某一刀没能把点名的断言逼红" >&2
     FAILED=1
   else
     echo "台账：$(pin_of sabotage) 把刀各自逼红了点名的断言 ✓"
@@ -242,7 +242,7 @@ for base in "${SHAPES[@]}"; do
           case "$BOOT" in *nope*|*booting*|"") sleep 0.5 ;; *) break ;; esac
         done
         echo "  boot: midloop $BOOT @ $base"
-        [ "$BOOT" = "ready" ] || { echo "  RED core：页面没到 ready（读到 $BOOT）" >&2; FAILED=1; }
+        [ "$BOOT" = "ready" ] || { echo "  RED core：页面没到 ready（读到 ${BOOT}）" >&2; FAILED=1; }
         run_scenario engine core
         run_scenario gen core
         leg_stop ;;
@@ -339,7 +339,7 @@ if [ "$SELF" = 1 ]; then
   HIT=$(awk '$2 > 0' "$REPORTS" | wc -l | tr -d ' ')
   echo "  应有 $EXPECTED 份报告，实到 $GOT 份，其中 $HIT 份点名吃下了种下的错"
   if [ "$GOT" != "$EXPECTED" ]; then
-    echo "  RED 阴性自证的报告数对不上：$GOT ≠ $EXPECTED（有腿没跑，或对数表漂了）" >&2
+    echo "  RED 阴性自证的报告数对不上：$GOT ≠ ${EXPECTED}（有腿没跑，或对数表漂了）" >&2
     FAILED=1
   fi
   if [ "$FAILED" = 0 ]; then
