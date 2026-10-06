@@ -22,11 +22,7 @@ jobs:
       # No npm install：这仓零运行时依赖，为了证明「什么都没装」而往 CI 里拉一个浏览器或打包器，
       # 换来的只是下一次网络抖动时的红。
       - name: Syntax check every source
-        run: |
-          for f in $(git ls-files 'js/*.js' 'js/*/*.js'); do node --check "$f" || exit 1; done
-          node --check server.cjs
-          for f in $(git ls-files 'tools/*.mjs' tools/scenarios.js tools/playtest.cjs); do node --check "$f" || exit 1; done
-
+        run: npm run check
       # 判据 1 + 判据 2 的正面证据，加上三组对照（0 解 / 8 解 / 独立环枚举的金标准）。
       # 纯 node，不需要浏览器，所以每一次 merge 前它都在。
       - name: Engine tests
