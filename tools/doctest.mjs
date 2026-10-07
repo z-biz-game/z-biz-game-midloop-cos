@@ -258,15 +258,28 @@ ok(ET.includes(', 26)') && ET.includes(', 1)') && weakStrong.includes(26),
 
 // ---- D9 引用不漂：文档里每一个 path:NN 都指向真实文件里真实存在的那一行 ----
 const cites = [...DOCS.matchAll(/((?:\.github\/workflows\/)?[\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml)):(\d+)(?:-(\d+))?/g)];
-const bad = [];
-for (const c of cites) {
+// 一条引用能犯的错有三样：文件不在树里、行号越界、被指的行段整段是空行。第三样是这一轮补的：
+// 在前面插几行之后 `:NN` 指的是隔壁的空行，可它照样"在界内"——只问"行号存在吗"的闸一路绿。
+const citeMiss = (raw, fromRaw, toRaw) => {
   let src;
-  try { src = read(c[1]); } catch { bad.push(`${c[1]}:${c[2]}（文件不存在）`); continue; }
-  const n = src.split('\n').length;
-  if (+c[2] > n || (+c[3] && +c[3] > n)) bad.push(`${c[1]}:${c[2]}${c[3] ? '-' + c[3] : ''}（该文件只有 ${n} 行）`);
-}
-ok(bad.length === 0, `D9 文档里的 ${cites.length} 条 path:NN 引用都落在真实文件的行数内`,
-  bad.length ? `越界：${bad.join('，')}` : cites.length ? '全部在范围内' : '文档现在不引行号，只引文件名（那就没什么可漂的）');
+  try { src = read(raw); } catch { return `${raw}:${fromRaw}（文件不存在）`; }
+  const L = src.split('\n');
+  const to = +(toRaw || fromRaw);
+  if (+fromRaw > L.length || to > L.length) return `${raw}:${fromRaw}${toRaw ? '-' + toRaw : ''}（该文件只有 ${L.length} 行）`;
+  if (L.slice(+fromRaw - 1, to).join('').trim() === '') return `${raw}:${fromRaw}${toRaw ? '-' + toRaw : ''} 那几行整段是空行`;
+  return '';
+};
+const bad = cites.map((c) => citeMiss(c[1], c[2], c[3])).filter(Boolean);
+// 本仓文档今天一条 :NN 都不引，空行这一问就没有真靶子可打——所以靶子从本闸自己的文件里现量
+// （写死行号会在有人把那一行填上的那天停止测试），量不到就改口变红，不许静默绿。
+const ownLines = read('tools/doctest.mjs').split('\n');
+let blankAt = 0;
+for (let i = 1; i < ownLines.length; i++) if (String(ownLines[i]).trim() === '') { blankAt = i + 1; break; }
+const blankKnife = blankAt ? citeMiss('tools/doctest.mjs', blankAt, null) : '';
+ok(bad.length === 0 && !!blankKnife, `D9 文档里的 ${cites.length} 条 path:NN 引用都落在真实文件的行数内、且被指的那几行整段不许是空行（在界内不等于指到了代码；这一格自带一把指向空行的刀）`,
+  bad.length ? `越界/不存在/空行：${bad.join('，')}`
+    : blankKnife ? `${cites.length ? '全部在范围内' : '文档现在不引行号，只引文件名（那就没什么可漂的）'} · 刀：本闸第 ${blankAt} 行现量是空行，指过去判红「那几行整段是空行」`
+      : '本闸自己的文件里现量不出空行靶子 —— 空行那一道没被证明过');
 
 // ---- D10 红线标签双向：文档点名的每条红线都得存在，存在的每条红线都得有人写 ----
 const realLabels = [...new Set([...BAL.matchAll(/\b(B\d(?:b)?)(?=[ 　])/g)].map((m) => m[1]))];
