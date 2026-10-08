@@ -257,7 +257,7 @@ ok(ET.includes(', 26)') && ET.includes(', 1)') && weakStrong.includes(26),
   `README 里的「N 个环」${weakStrong.join('/')} · engine-test 有 26 与 1 两条等式`);
 
 // ---- D9 引用不漂：文档里每一个 path:NN 都指向真实文件里真实存在的那一行 ----
-const cites = [...DOCS.matchAll(/((?:\.github\/workflows\/)?[\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml)):(\d+)(?:-(\d+))?/g)];
+const cites = [...DOCS.matchAll(/((?:\.github\/workflows\/)?[\w./-]+\.[A-Za-z][A-Za-z0-9]{0,11}):(\d+)(?:-(\d+))?/g)];
 // 一条引用能犯的错有三样：文件不在树里、行号越界、被指的行段整段是空行。第三样是这一轮补的：
 // 在前面插几行之后 `:NN` 指的是隔壁的空行，可它照样"在界内"——只问"行号存在吗"的闸一路绿。
 const citeMiss = (raw, fromRaw, toRaw) => {
