@@ -27,6 +27,10 @@ import {
 } from './engine/rules.js';
 import { BoardView } from './render/board.js';
 import { Game, marksLength, DIRS, NAME_BY_DIR } from './ui/game.js';
+// 听觉与触觉这两路反馈：视觉与数值之外，桌面上还该有"听得见"的一路。
+// 音频模块自己管手势解锁与真静音（suspend），这里只管把音接到引擎的判定上。
+import { audio } from './audio.js';
+import { haptics } from './haptics.js';
 
 const VERSION = '0.1.0';
 // 默认档从引擎的菜单里挑（挑不到就退到第一档）：HTML 里一个尺寸字面量都不写。
@@ -216,6 +220,9 @@ function checkWin() {
   if (reasons.length) return false;
   const order = loopOf(game.board, game.st) || [];
   won = true;
+  // 通关只响一次（won 这个旗子就是那把锁）：引擎的 verify 说这条闭环成立才响。
+  audio.play('win');
+  haptics.correct();
   veil.hidden = false;
   $('win-meta').textContent =
     `seed ${game.seed} · ${game.sizeKey} · 点 ${game.puzzle.dotCount} 颗 · 环长 ${order.length} 格 · ${game.moves} 步 · ${fmt(clock())}`;
@@ -238,6 +245,8 @@ function runCheck() {
   }
   reasonsAll = true;
   say(`还没成：引擎给了 ${reasons.length} 条理由，第一条是「${reasons[0]}」。`, 'bad');
+  audio.play('wrong');         // 引擎说还没成：这一声是"没成"，不是"错了"
+  haptics.wrong();
   render();
   return reasons;
 }
@@ -254,11 +263,15 @@ function hint() {
   if (d && d.contradiction) {
     // 打脸的时候铅笔不肯再往前推：该撤哪一笔是玩家自己的判断。这里不落笔，也不装成落了一笔。
     say(`这里已经矛盾了：${d.why}。提示这一步什么都不画 —— 先撤掉那笔再说。`, 'bad');
+    audio.play('wrong');         // 引擎说盘自己打脸了
+    haptics.wrong();
     render();
     return { kind: 'contradiction', d, moved: false };
   }
   if (!d || d.stalled) {
     say(`铅笔推不动了：${d && d.why ? d.why : `${RULE_ORDER.length} 条规则轮了一圈，没话可说`}。提示不会替你猜，也不会去读答案 —— 剩下的得你自己接。`);
+    audio.play('wrong');         // 引擎说推不动了
+    haptics.wrong();
     render();
     return { kind: 'stalled', d, moved: false };
   }
@@ -267,12 +280,16 @@ function hint() {
     // Game 拒收了引擎给的那一条（号在盘外，或那一处已经不是没落笔）。落不下去就照直说落不下去，
     // 不许退回「那按我们自己算的画」——那正是第二记分板的开头。
     say(`提示这次没落下去：引擎给的是 ${d.kind}[${d.idx}] = ${d.value}，Game 拒收（不在盘上或已经这样了）。再按一次。`, 'bad');
+    audio.play('wrong');         // Game 拒收了引擎给的那一条
+    haptics.wrong();
     render();
     return { kind: 'noop', d, moved: false };
   }
   // 落成的那一句话就是引擎给的那两句原文拼起来：规则名 + 为什么
   say(`${d.ruleText} —— ${d.why}`, 'hint', d.at);
   srCell.textContent = d.why;
+  audio.play('correct');         // 引擎给的那一条真落成了
+  haptics.correct();
   render();
   checkWin();
   persist();
@@ -440,6 +457,9 @@ function syncSizeButtons() {
 // 左键是**铺笔**：经过的每一条边都写成当前那支笔（loop→LOOP、cut→CUT、erase→UNKNOWN），
 // 一整笔拖拽是一组撤销。右键是**就动指针压着的那一条边**：叉 ↔ 没落笔（LOOP 先变叉），
 // 一次点击一组撤销一步。题面的点不可点：它是题面，不是笔迹，这一层没有任何一条路能把笔落在点上。
+//
+// 声音接在**引擎的判定**上：Game.setEdge 返回一条记录（rec）就是引擎真改了那条边，
+// 返回 null 就是"这里根本没有边 / 已经是这个值了"——那两种在耳朵里必须不一样。
 function onPointerDown(ev) {
   if (!game) return;
   const cell = view.hitCell(ev.clientX, ev.clientY);
@@ -453,7 +473,16 @@ function onPointerDown(ev) {
   startClock();
   if (ev.button === 2) {
     const hit = view.hitEdge(ev.clientX, ev.clientY);
-    if (hit) game.toggleCut(hit.cell, hit.d); // 不在手势里：setEdge 自己就是一组
+    if (hit) {
+      const rec = game.toggleCut(hit.cell, hit.d); // 不在手势里：setEdge 自己就是一组
+      if (rec) {
+        audio.play('tap');
+        haptics.tap();
+      } else {
+        audio.play('blocked');
+        haptics.wrong();
+      }
+    }
     render();
     persist();
     return;
@@ -462,10 +491,18 @@ function onPointerDown(ev) {
   game.beginGesture();
   drag = { cells: [cell], kind };
   cursor = cell;
-  if (mode === 'erase') game.eraseAt(cell);
-  else if (mode === 'cut') {
+  if (mode === 'erase') {
+    const touched = game.eraseAt(cell);
+    if (touched) {
+      audio.play('tap');
+      haptics.tap();
+    }
+  } else if (mode === 'cut') {
     const hit = view.hitEdge(ev.clientX, ev.clientY);
-    if (hit) game.setEdge(hit.cell, hit.d, CUT);
+    if (hit && game.setEdge(hit.cell, hit.d, CUT)) {
+      audio.play('tap');
+      haptics.tap();
+    }
   }
   render();
 }
@@ -479,7 +516,14 @@ function onPointerMove(ev) {
   const d = view.dirFromTo(last, cell);
   if (d < 0) return; // 不相邻：只挪笔，不连线
   drag.cells.push(cell);
-  game.setEdge(last, d, drag.kind);
+  const rec = game.setEdge(last, d, drag.kind);
+  if (rec) {
+    audio.play('tap');         // 引擎真在这条边上落了一笔
+    haptics.tap();
+  } else {
+    audio.play('blocked');     // 这一笔什么也没改成（已经是这个值了）
+    haptics.wrong();
+  }
   cursor = cell;
   render();
 }
@@ -523,11 +567,20 @@ async function onKey(ev) {
     } else if (anchor !== cursor) {
       const d = view.dirFromTo(anchor, cursor);
       game.beginGesture();
+      let rec = null;
       if (d >= 0) {
         // 叉那支笔在键盘上是**翻**的：同一条边回车一次画叉、光标挪回来再回车一次擦回没落笔
         //（左键拖拽那支是铺笔，经过哪条写哪条，不翻转——一次拖拽翻一堆边会把人绕晕）。
-        if (mode === 'cut') game.toggleCut(anchor, d);
-        else game.setEdge(anchor, d, PEN[mode]);
+        if (mode === 'cut') rec = game.toggleCut(anchor, d);
+        else rec = game.setEdge(anchor, d, PEN[mode]);
+      }
+      // 键盘这条路和指针那条路是同一个引擎入口（Game.setEdge），所以声音也一样。
+      if (rec) {
+        audio.play('tap');
+        haptics.tap();
+      } else if (d >= 0) {
+        audio.play('blocked');
+        haptics.wrong();
       }
       game.endGesture();
       anchor = cursor;
@@ -542,7 +595,11 @@ async function onKey(ev) {
     ev.preventDefault();
     startClock();
     // eraseAt 不在拖拽组里时自己就把这一步压进撤销栈了，别再 undo 一次抵消掉
-    game.eraseAt(cursor);
+    const touched = game.eraseAt(cursor);
+    if (touched) {
+      audio.play('tap');
+      haptics.tap();
+    }
     render();
     persist();
   } else if (k === 'z' || k === 'Z') {
@@ -579,13 +636,21 @@ function wireButtons() {
   $('btn-check').addEventListener('click', () => runCheck());
   $('btn-undo').addEventListener('click', async () => {
     if (!game) return;
-    game.undo();
+    if (game.undo()) {
+      audio.play('move');       // 盘面退了一步
+      haptics.tap();
+    } else {
+      audio.play('wrong');      // 没有可撤的一步
+      haptics.wrong();
+    }
     render();
     persist();
   });
   $('btn-clear').addEventListener('click', () => {
     if (!game) return;
     game.clearAll();
+    audio.play('move');         // 盘面清空了
+    haptics.tap();
     won = false;
     note = null;
     reasonsAll = false;
@@ -850,3 +915,26 @@ if (document.readyState === 'loading') {
 } else {
   bootFullscreen();
 }
+
+// ---- 音效开关（#btn-sound）----
+//
+// 静音走 `audio.setMuted(true)`，那是 `ctx.suspend()`：整个 AudioContext 挂起。
+// **不许**改成像"把 master.gain 拧到 0"那样 —— 只拧 gain 是假静音：节点照建、时钟照跑，
+// 取消静音之后还有一截尾巴在响。真正的静音必须是挂起整个上下文。
+//
+// 按钮找不到就不装（和全屏那一条同一条纪律）：留一串没人按的代码等于没做这个功能。
+(function bindSound() {
+  const btn = document.getElementById('btn-sound');
+  if (!btn) return;
+  function paint() {
+    const on = !audio.muted;
+    btn.setAttribute('aria-pressed', String(on));
+    btn.textContent = on ? '音效：开' : '音效：关';
+    btn.title = on ? '点击关闭音效' : '点击开启音效';
+  }
+  btn.addEventListener('click', () => {
+    audio.setMuted(!audio.muted);
+    paint();
+  });
+  paint();
+})();
